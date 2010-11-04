@@ -24,24 +24,24 @@ import (
 )
 
 const (
-    kindFloat = 0x1
-    kindString = 0x2
-    kindDocument = 0x3
-    kindArray = 0x4
-    kindBinary = 0x5
-    kindObjectId = 0x7
-    kindBool = 0x8
-    kindDateTime = 0x9
-    kindNull = 0xA
-    kindRegexp = 0xB
-    kindCode = 0xD
-    kindSymbol = 0xE
-    kindCodeWithScope = 0xF
-    kindInt32 = 0x10
-    kintTimestamp = 0x11
-    kindInt64 = 0x12
-    kindMinKey = 0xff
-    kindMaxKey = 0x7f
+	kindFloat         = 0x1
+	kindString        = 0x2
+	kindDocument      = 0x3
+	kindArray         = 0x4
+	kindBinary        = 0x5
+	kindObjectId      = 0x7
+	kindBool          = 0x8
+	kindDateTime      = 0x9
+	kindNull          = 0xA
+	kindRegexp        = 0xB
+	kindCode          = 0xD
+	kindSymbol        = 0xE
+	kindCodeWithScope = 0xF
+	kindInt32         = 0x10
+	kintTimestamp     = 0x11
+	kindInt64         = 0x12
+	kindMinKey        = 0xff
+	kindMaxKey        = 0x7f
 )
 
 type UnsupportedTypeError struct {
@@ -84,7 +84,11 @@ func Encode(buf *bytes.Buffer, doc interface{}) (err os.Error) {
 	case *reflect.MapValue:
 		e.writeMap(v)
 	default:
-		return &UnsupportedTypeError{v.Type()}
+		if v.Type() == typeOrderedMap {
+			e.writeOrderedMap(v.Interface().(OrderedMap))
+		} else {
+			return &UnsupportedTypeError{v.Type()}
+		}
 	}
 	return nil
 }
@@ -125,6 +129,15 @@ func (e *encodeState) writeMap(v *reflect.MapValue) {
 	offset := e.beginDoc()
 	for _, k := range v.Keys() {
 		e.encodeValue(k.(*reflect.StringValue).Get(), v.Elem(k))
+	}
+	e.WriteByte(0)
+	e.endDoc(offset)
+}
+
+func (e *encodeState) writeOrderedMap(v OrderedMap) {
+	offset := e.beginDoc()
+	for _, kv := range v {
+		e.encodeValue(kv.Key, reflect.NewValue(kv.Value))
 	}
 	e.WriteByte(0)
 	e.endDoc(offset)
@@ -234,6 +247,20 @@ func encodeCodeWithScope(e *encodeState, name string, value reflect.Value) {
 	e.endDoc(offset)
 }
 
+func encodeKey(e *encodeState, name string, value reflect.Value) {
+	switch value.Interface().(Key) {
+	case 1:
+		e.WriteByte(kindMaxKey)
+	case -1:
+		e.WriteByte(kindMinKey)
+	default:
+		e.error(os.NewError("bson: unknown key"))
+	}
+	e.WriteString(name)
+	e.WriteByte(0)
+}
+
+
 func encodeStruct(e *encodeState, name string, value reflect.Value) {
 	v := value.(*reflect.StructValue)
 	e.WriteByte(kindDocument)
@@ -253,6 +280,20 @@ func encodeMap(e *encodeState, name string, value reflect.Value) {
 		e.WriteString(name)
 		e.WriteByte(0)
 		e.writeMap(v)
+	}
+}
+
+func encodeOrderedMap(e *encodeState, name string, value reflect.Value) {
+	v := value.Interface().(OrderedMap)
+	if v == nil {
+		e.WriteByte(kindNull)
+		e.WriteString(name)
+		e.WriteByte(0)
+	} else {
+		e.WriteByte(kindDocument)
+		e.WriteString(name)
+		e.WriteByte(0)
+		e.writeOrderedMap(v)
 	}
 }
 
@@ -300,27 +341,29 @@ var typeEncoder map[reflect.Type]encoderFunc
 
 func init() {
 	kindEncoder = map[reflect.Kind]encoderFunc{
-		reflect.Struct:    encodeStruct,
-		reflect.Ptr:       encodeInterfaceOrPtr,
-		reflect.Interface: encodeInterfaceOrPtr,
-		reflect.String:    func(e *encodeState, name string, value reflect.Value) { encodeString(e, kindString, name, value) },
-		reflect.Int8:      encodeInt,
-		reflect.Int16:     encodeInt,
-		reflect.Int32:     encodeInt,
-		reflect.Int:       encodeInt,
-		reflect.Int64:     func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindInt64, name, value) },
-		reflect.Float:     encodeFloat,
+		reflect.Array:     encodeArrayOrSlice,
+		reflect.Bool:      encodeBool,
 		reflect.Float32:   encodeFloat,
 		reflect.Float64:   encodeFloat,
-		reflect.Bool:      encodeBool,
-		reflect.Array:     encodeArrayOrSlice,
-		reflect.Slice:     encodeArrayOrSlice,
+		reflect.Float:     encodeFloat,
+		reflect.Int16:     encodeInt,
+		reflect.Int32:     encodeInt,
+		reflect.Int64:     func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindInt64, name, value) },
+		reflect.Int8:      encodeInt,
+		reflect.Int:       encodeInt,
+		reflect.Interface: encodeInterfaceOrPtr,
 		reflect.Map:       encodeMap,
+		reflect.Ptr:       encodeInterfaceOrPtr,
+		reflect.Slice:     encodeArrayOrSlice,
+		reflect.String:    func(e *encodeState, name string, value reflect.Value) { encodeString(e, kindString, name, value) },
+		reflect.Struct:    encodeStruct,
 	}
 	typeEncoder = map[reflect.Type]encoderFunc{
-		reflect.Typeof(DateTime(0)):     func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindDateTime, name, value) },
-		reflect.Typeof(Regexp{}):        encodeRegexp,
-		reflect.Typeof(ObjectId{}):      encodeObjectId,
-		reflect.Typeof(CodeWithScope{}): encodeCodeWithScope,
+		typeCodeWithScope: encodeCodeWithScope,
+		typeDateTime:      func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindDateTime, name, value) },
+		typeKey:           encodeKey,
+		typeObjectId:      encodeObjectId,
+		typeOrderedMap:    encodeOrderedMap,
+		typeRegexp:        encodeRegexp,
 	}
 }

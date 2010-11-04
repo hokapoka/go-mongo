@@ -16,6 +16,7 @@ package mongo
 
 import (
 	"encoding/binary"
+	"reflect"
 )
 
 var wire = binary.LittleEndian
@@ -33,3 +34,26 @@ type Regexp struct {
 }
 
 type ObjectId [12]byte
+
+type KeyValue struct {
+	Key   string
+	Value interface{}
+}
+
+type OrderedMap []KeyValue
+
+type Key int
+
+const (
+	MaxKey Key = 1
+	MinKey Key = -1
+)
+
+var (
+	typeDateTime      = reflect.Typeof(DateTime(0))
+	typeCodeWithScope = reflect.Typeof(CodeWithScope{})
+	typeRegexp        = reflect.Typeof(Regexp{})
+	typeObjectId      = reflect.Typeof(ObjectId{})
+	typeOrderedMap    = reflect.Typeof(OrderedMap{})
+	typeKey           = reflect.Typeof(MaxKey)
+)
