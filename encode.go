@@ -23,6 +23,27 @@ import (
 	"strconv"
 )
 
+const (
+    kindFloat = 0x1
+    kindString = 0x2
+    kindDocument = 0x3
+    kindArray = 0x4
+    kindBinary = 0x5
+    kindObjectId = 0x7
+    kindBool = 0x8
+    kindDateTime = 0x9
+    kindNull = 0xA
+    kindRegexp = 0xB
+    kindCode = 0xD
+    kindSymbol = 0xE
+    kindCodeWithScope = 0xF
+    kindInt32 = 0x10
+    kintTimestamp = 0x11
+    kindInt64 = 0x12
+    kindMinKey = 0xff
+    kindMaxKey = 0x7f
+)
+
 type UnsupportedTypeError struct {
 	Type reflect.Type
 }
@@ -126,7 +147,7 @@ func (e *encodeState) encodeValue(name string, value reflect.Value) {
 
 func encodeBool(e *encodeState, name string, value reflect.Value) {
 	v := value.(*reflect.BoolValue)
-	e.WriteByte(0x8)
+	e.WriteByte(kindBool)
 	e.WriteString(name)
 	e.WriteByte(0)
 	if v.Get() {
@@ -138,16 +159,16 @@ func encodeBool(e *encodeState, name string, value reflect.Value) {
 
 func encodeInt(e *encodeState, name string, value reflect.Value) {
 	v := value.(*reflect.IntValue)
-	e.WriteByte(0x10)
+	e.WriteByte(kindInt32)
 	e.WriteString(name)
 	e.WriteByte(0)
 	wire.PutUint32(e.buf[:4], uint32(v.Get()))
 	e.Write(e.buf[:4])
 }
 
-func encodeInt64(e *encodeState, tag byte, name string, value reflect.Value) {
+func encodeInt64(e *encodeState, kind byte, name string, value reflect.Value) {
 	v := value.(*reflect.IntValue)
-	e.WriteByte(tag)
+	e.WriteByte(kind)
 	e.WriteString(name)
 	e.WriteByte(0)
 	wire.PutUint64(e.buf[:8], uint64(v.Get()))
@@ -156,16 +177,16 @@ func encodeInt64(e *encodeState, tag byte, name string, value reflect.Value) {
 
 func encodeFloat(e *encodeState, name string, value reflect.Value) {
 	v := value.(*reflect.FloatValue)
-	e.WriteByte(0x1)
+	e.WriteByte(kindFloat)
 	e.WriteString(name)
 	e.WriteByte(0)
 	wire.PutUint64(e.buf[:8], math.Float64bits(v.Get()))
 	e.Write(e.buf[:8])
 }
 
-func encodeString(e *encodeState, tag byte, name string, value reflect.Value) {
+func encodeString(e *encodeState, kind byte, name string, value reflect.Value) {
 	v := value.(*reflect.StringValue)
-	e.WriteByte(tag)
+	e.WriteByte(kind)
 	e.WriteString(name)
 	e.WriteByte(0)
 	s := v.Get()
@@ -177,7 +198,7 @@ func encodeString(e *encodeState, tag byte, name string, value reflect.Value) {
 
 func encodeRegexp(e *encodeState, name string, value reflect.Value) {
 	r := value.Interface().(Regexp)
-	e.WriteByte(0xb)
+	e.WriteByte(kindRegexp)
 	e.WriteString(name)
 	e.WriteByte(0)
 	e.WriteString(r.Pattern)
@@ -188,7 +209,7 @@ func encodeRegexp(e *encodeState, name string, value reflect.Value) {
 
 func encodeObjectId(e *encodeState, name string, value reflect.Value) {
 	oid := value.Interface().(ObjectId)
-	e.WriteByte(0x7)
+	e.WriteByte(kindObjectId)
 	e.WriteString(name)
 	e.WriteByte(0)
 	e.Write(oid[:])
@@ -196,7 +217,7 @@ func encodeObjectId(e *encodeState, name string, value reflect.Value) {
 
 func encodeCodeWithScope(e *encodeState, name string, value reflect.Value) {
 	c := value.Interface().(CodeWithScope)
-	e.WriteByte(0xf)
+	e.WriteByte(kindCodeWithScope)
 	e.WriteString(name)
 	e.WriteByte(0)
 	offset := e.beginDoc()
@@ -215,7 +236,7 @@ func encodeCodeWithScope(e *encodeState, name string, value reflect.Value) {
 
 func encodeStruct(e *encodeState, name string, value reflect.Value) {
 	v := value.(*reflect.StructValue)
-	e.WriteByte(0x3)
+	e.WriteByte(kindDocument)
 	e.WriteString(name)
 	e.WriteByte(0)
 	e.writeStruct(v)
@@ -224,11 +245,11 @@ func encodeStruct(e *encodeState, name string, value reflect.Value) {
 func encodeMap(e *encodeState, name string, value reflect.Value) {
 	v := value.(*reflect.MapValue)
 	if v.IsNil() {
-		e.WriteByte(0xa)
+		e.WriteByte(kindNull)
 		e.WriteString(name)
 		e.WriteByte(0)
 	} else {
-		e.WriteByte(0x3)
+		e.WriteByte(kindDocument)
 		e.WriteString(name)
 		e.WriteByte(0)
 		e.writeMap(v)
@@ -239,7 +260,7 @@ func encodeArrayOrSlice(e *encodeState, name string, value reflect.Value) {
 	t := value.Type().(reflect.ArrayOrSliceType)
 	if t.Elem().Kind() == reflect.Uint8 {
 		b := value.Interface().([]byte)
-		e.WriteByte(0x5)
+		e.WriteByte(kindBinary)
 		e.WriteString(name)
 		e.WriteByte(0)
 		wire.PutUint32(e.buf[:4], uint32(len(b)))
@@ -248,7 +269,7 @@ func encodeArrayOrSlice(e *encodeState, name string, value reflect.Value) {
 		e.Write(b)
 	} else {
 		v := value.(reflect.ArrayOrSliceValue)
-		e.WriteByte(0x4)
+		e.WriteByte(kindArray)
 		e.WriteString(name)
 		e.WriteByte(0)
 		offset := e.beginDoc()
@@ -264,7 +285,7 @@ func encodeArrayOrSlice(e *encodeState, name string, value reflect.Value) {
 func encodeInterfaceOrPtr(e *encodeState, name string, value reflect.Value) {
 	v := value.(interfaceOrPtrValue)
 	if v.IsNil() {
-		e.WriteByte(0xa)
+		e.WriteByte(kindNull)
 		e.WriteString(name)
 		e.WriteByte(0)
 		return
@@ -282,12 +303,12 @@ func init() {
 		reflect.Struct:    encodeStruct,
 		reflect.Ptr:       encodeInterfaceOrPtr,
 		reflect.Interface: encodeInterfaceOrPtr,
-		reflect.String:    func(e *encodeState, name string, value reflect.Value) { encodeString(e, 0x2, name, value) },
+		reflect.String:    func(e *encodeState, name string, value reflect.Value) { encodeString(e, kindString, name, value) },
 		reflect.Int8:      encodeInt,
 		reflect.Int16:     encodeInt,
 		reflect.Int32:     encodeInt,
 		reflect.Int:       encodeInt,
-		reflect.Int64:     func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, 0x12, name, value) },
+		reflect.Int64:     func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindInt64, name, value) },
 		reflect.Float:     encodeFloat,
 		reflect.Float32:   encodeFloat,
 		reflect.Float64:   encodeFloat,
@@ -297,7 +318,7 @@ func init() {
 		reflect.Map:       encodeMap,
 	}
 	typeEncoder = map[reflect.Type]encoderFunc{
-		reflect.Typeof(DateTime(0)):     func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, 0x9, name, value) },
+		reflect.Typeof(DateTime(0)):     func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindDateTime, name, value) },
 		reflect.Typeof(Regexp{}):        encodeRegexp,
 		reflect.Typeof(ObjectId{}):      encodeObjectId,
 		reflect.Typeof(CodeWithScope{}): encodeCodeWithScope,
