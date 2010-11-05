@@ -23,35 +23,6 @@ import (
 	"strconv"
 )
 
-const (
-	kindFloat         = 0x1
-	kindString        = 0x2
-	kindDocument      = 0x3
-	kindArray         = 0x4
-	kindBinary        = 0x5
-	kindObjectId      = 0x7
-	kindBool          = 0x8
-	kindDateTime      = 0x9
-	kindNull          = 0xA
-	kindRegexp        = 0xB
-	kindCode          = 0xD
-	kindSymbol        = 0xE
-	kindCodeWithScope = 0xF
-	kindInt32         = 0x10
-	kintTimestamp     = 0x11
-	kindInt64         = 0x12
-	kindMinKey        = 0xff
-	kindMaxKey        = 0x7f
-)
-
-type UnsupportedTypeError struct {
-	Type reflect.Type
-}
-
-func (e *UnsupportedTypeError) String() string {
-	return "bson: unsupported type: " + e.Type.String()
-}
-
 type interfaceOrPtrValue interface {
 	IsNil() bool
 	Elem() reflect.Value
@@ -112,7 +83,9 @@ func (e *encodeState) writeStruct(v *reflect.StructValue) {
 	offset := e.beginDoc()
 	t := v.Type().(*reflect.StructType)
 	for i := 0; i < v.NumField(); i++ {
-		e.encodeValue(t.Field(i).Name, v.Field(i))
+		if name := fieldName(t.Field(i)); name != "" {
+			e.encodeValue(name, v.Field(i))
+		}
 	}
 	e.WriteByte(0)
 	e.endDoc(offset)
@@ -260,7 +233,6 @@ func encodeKey(e *encodeState, name string, value reflect.Value) {
 	e.WriteByte(0)
 }
 
-
 func encodeStruct(e *encodeState, name string, value reflect.Value) {
 	v := value.(*reflect.StructValue)
 	e.WriteByte(kindDocument)
@@ -365,5 +337,7 @@ func init() {
 		typeObjectId:      encodeObjectId,
 		typeOrderedMap:    encodeOrderedMap,
 		typeRegexp:        encodeRegexp,
+		typeSymbol:        func(e *encodeState, name string, value reflect.Value) { encodeString(e, kindSymbol, name, value) },
+		typeCode:          func(e *encodeState, name string, value reflect.Value) { encodeString(e, kindCode, name, value) },
 	}
 }
