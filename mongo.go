@@ -13,3 +13,52 @@
 // under the License.
 
 package mongo
+
+import (
+	"os"
+)
+
+type Mongo interface {
+	Db(name string) (Db, os.Error)
+	DbNames() ([]string, os.Error)
+}
+
+type Db interface {
+	Name() string
+	CollectionNames() ([]string, os.Error)
+	Collection(name string) (Collection, os.Error)            // collection must exist
+	CreateCollection(name string) Collection                  // collection can exist
+	CreateCollectionOptions(name string, options interface{}) // collection can exist
+	DropCollection(name string) os.Error
+	ExecuteCommand(command interface{}, document interface{}) os.Error
+	Close() os.Error
+	Drop()
+	Admin() Admin
+}
+
+const (
+	ProfilingLevelOff      = 0
+	ProfilingLevelSlowOnly = 1
+	ProfilingLevelSlowAll  = 2
+)
+
+type Admin interface {
+	// ProfilingLevel returns one of the ProfilingLevel* values.
+	ProfilingLevel() (int, os.Error)
+	SetProfilingLevel(int) os.Error
+	ProfilingInfo() (map[string]interface{}, os.Error)
+	ValidateCollection(name string) bool
+}
+
+type Collection interface {
+	Find(doc interface{}) (Cursor, os.Error)
+	Insert(doc interface{}) os.Error
+	Remove(query interface{}) os.Error
+	Modify(selector, modifier interface{}) os.Error
+	Replace(selector, object interface{}) os.Error
+	Repsert(selector, object interface{}) os.Error
+	Count() int64
+	CountQuery(doc interface{}) int64
+}
+
+type Cursor interface{}
