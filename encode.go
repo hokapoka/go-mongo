@@ -23,6 +23,14 @@ import (
 	"strconv"
 )
 
+type EncodeTypeError struct {
+	Type reflect.Type
+}
+
+func (e *EncodeTypeError) String() string {
+	return "bson: unsupported type: " + e.Type.String()
+}
+
 type interfaceOrPtrValue interface {
 	IsNil() bool
 	Elem() reflect.Value
@@ -58,13 +66,13 @@ func Encode(buf *bytes.Buffer, doc interface{}) (err os.Error) {
 		if v.Type() == typeOrderedMap {
 			e.writeOrderedMap(v.Interface().(OrderedMap))
 		} else {
-			return &UnsupportedTypeError{v.Type()}
+			return &EncodeTypeError{v.Type()}
 		}
 	}
 	return nil
 }
 
-func (e *encodeState) error(err os.Error) {
+func (e *encodeState) abort(err os.Error) {
 	panic(err)
 }
 
@@ -77,6 +85,12 @@ func (e *encodeState) beginDoc() (offset int) {
 func (e *encodeState) endDoc(offset int) {
 	n := len(e.Bytes()) - offset
 	wire.PutUint32(e.Bytes()[offset:offset+4], uint32(n))
+}
+
+func (e *encodeState) writeKindName(kind int, name string) {
+	e.WriteByte(byte(kind))
+	e.WriteString(name)
+	e.WriteByte(0)
 }
 
 func (e *encodeState) writeStruct(v *reflect.StructValue) {
@@ -92,12 +106,11 @@ func (e *encodeState) writeStruct(v *reflect.StructValue) {
 }
 
 func (e *encodeState) writeMap(v *reflect.MapValue) {
-	if _, ok := v.Type().(*reflect.MapType).Key().(*reflect.StringType); !ok {
-		e.error(&UnsupportedTypeError{v.Type()})
-	}
 	if v.IsNil() {
-		// bufX null
 		return
+	}
+	if _, ok := v.Type().(*reflect.MapType).Key().(*reflect.StringType); !ok {
+		e.abort(&EncodeTypeError{v.Type()})
 	}
 	offset := e.beginDoc()
 	for _, k := range v.Keys() {
@@ -118,25 +131,22 @@ func (e *encodeState) writeOrderedMap(v OrderedMap) {
 
 func (e *encodeState) encodeValue(name string, value reflect.Value) {
 	if value == nil {
-		panic(os.NewError("nil not handled"))
+		return
 	}
 	t := value.Type()
 	encoder, found := typeEncoder[t]
 	if !found {
 		encoder, found = kindEncoder[t.Kind()]
 		if !found {
-			e.error(&UnsupportedTypeError{value.Type()})
+			e.abort(&EncodeTypeError{value.Type()})
 		}
 	}
 	encoder(e, name, value)
 }
 
 func encodeBool(e *encodeState, name string, value reflect.Value) {
-	v := value.(*reflect.BoolValue)
-	e.WriteByte(kindBool)
-	e.WriteString(name)
-	e.WriteByte(0)
-	if v.Get() {
+	e.writeKindName(kindBool, name)
+	if value.(*reflect.BoolValue).Get() {
 		e.WriteByte(1)
 	} else {
 		e.WriteByte(0)
@@ -144,38 +154,26 @@ func encodeBool(e *encodeState, name string, value reflect.Value) {
 }
 
 func encodeInt(e *encodeState, name string, value reflect.Value) {
-	v := value.(*reflect.IntValue)
-	e.WriteByte(kindInt32)
-	e.WriteString(name)
-	e.WriteByte(0)
-	wire.PutUint32(e.buf[:4], uint32(v.Get()))
+	e.writeKindName(kindInt32, name)
+	wire.PutUint32(e.buf[:4], uint32(value.(*reflect.IntValue).Get()))
 	e.Write(e.buf[:4])
 }
 
-func encodeInt64(e *encodeState, kind byte, name string, value reflect.Value) {
-	v := value.(*reflect.IntValue)
-	e.WriteByte(kind)
-	e.WriteString(name)
-	e.WriteByte(0)
-	wire.PutUint64(e.buf[:8], uint64(v.Get()))
+func encodeInt64(e *encodeState, kind int, name string, value reflect.Value) {
+	e.writeKindName(kind, name)
+	wire.PutUint64(e.buf[:8], uint64(value.(*reflect.IntValue).Get()))
 	e.Write(e.buf[:8])
 }
 
 func encodeFloat(e *encodeState, name string, value reflect.Value) {
-	v := value.(*reflect.FloatValue)
-	e.WriteByte(kindFloat)
-	e.WriteString(name)
-	e.WriteByte(0)
-	wire.PutUint64(e.buf[:8], math.Float64bits(v.Get()))
+	e.writeKindName(kindFloat, name)
+	wire.PutUint64(e.buf[:8], math.Float64bits(value.(*reflect.FloatValue).Get()))
 	e.Write(e.buf[:8])
 }
 
-func encodeString(e *encodeState, kind byte, name string, value reflect.Value) {
-	v := value.(*reflect.StringValue)
-	e.WriteByte(kind)
-	e.WriteString(name)
-	e.WriteByte(0)
-	s := v.Get()
+func encodeString(e *encodeState, kind int, name string, value reflect.Value) {
+	e.writeKindName(kind, name)
+	s := value.(*reflect.StringValue).Get()
 	wire.PutUint32(e.buf[:4], uint32(len(s)+1))
 	e.Write(e.buf[:4])
 	e.WriteString(s)
@@ -183,10 +181,8 @@ func encodeString(e *encodeState, kind byte, name string, value reflect.Value) {
 }
 
 func encodeRegexp(e *encodeState, name string, value reflect.Value) {
+	e.writeKindName(kindRegexp, name)
 	r := value.Interface().(Regexp)
-	e.WriteByte(kindRegexp)
-	e.WriteString(name)
-	e.WriteByte(0)
 	e.WriteString(r.Pattern)
 	e.WriteByte(0)
 	e.WriteString(r.Flags)
@@ -194,18 +190,14 @@ func encodeRegexp(e *encodeState, name string, value reflect.Value) {
 }
 
 func encodeObjectId(e *encodeState, name string, value reflect.Value) {
+	e.writeKindName(kindObjectId, name)
 	oid := value.Interface().(ObjectId)
-	e.WriteByte(kindObjectId)
-	e.WriteString(name)
-	e.WriteByte(0)
 	e.Write(oid[:])
 }
 
 func encodeCodeWithScope(e *encodeState, name string, value reflect.Value) {
+	e.writeKindName(kindCodeWithScope, name)
 	c := value.Interface().(CodeWithScope)
-	e.WriteByte(kindCodeWithScope)
-	e.WriteString(name)
-	e.WriteByte(0)
 	offset := e.beginDoc()
 	wire.PutUint32(e.buf[:4], uint32(len(c.Code)+1))
 	e.Write(e.buf[:4])
@@ -223,87 +215,61 @@ func encodeCodeWithScope(e *encodeState, name string, value reflect.Value) {
 func encodeKey(e *encodeState, name string, value reflect.Value) {
 	switch value.Interface().(Key) {
 	case 1:
-		e.WriteByte(kindMaxKey)
+		e.writeKindName(kindMaxKey, name)
 	case -1:
-		e.WriteByte(kindMinKey)
+		e.writeKindName(kindMinKey, name)
 	default:
-		e.error(os.NewError("bson: unknown key"))
+		e.abort(os.NewError("bson: unknown key"))
 	}
-	e.WriteString(name)
-	e.WriteByte(0)
 }
 
 func encodeStruct(e *encodeState, name string, value reflect.Value) {
-	v := value.(*reflect.StructValue)
-	e.WriteByte(kindDocument)
-	e.WriteString(name)
-	e.WriteByte(0)
-	e.writeStruct(v)
+	e.writeKindName(kindDocument, name)
+	e.writeStruct(value.(*reflect.StructValue))
 }
 
 func encodeMap(e *encodeState, name string, value reflect.Value) {
 	v := value.(*reflect.MapValue)
-	if v.IsNil() {
-		e.WriteByte(kindNull)
-		e.WriteString(name)
-		e.WriteByte(0)
-	} else {
-		e.WriteByte(kindDocument)
-		e.WriteString(name)
-		e.WriteByte(0)
+	if !v.IsNil() {
+		e.writeKindName(kindDocument, name)
 		e.writeMap(v)
 	}
 }
 
 func encodeOrderedMap(e *encodeState, name string, value reflect.Value) {
 	v := value.Interface().(OrderedMap)
-	if v == nil {
-		e.WriteByte(kindNull)
-		e.WriteString(name)
-		e.WriteByte(0)
-	} else {
-		e.WriteByte(kindDocument)
-		e.WriteString(name)
-		e.WriteByte(0)
+	if v != nil {
+		e.writeKindName(kindDocument, name)
 		e.writeOrderedMap(v)
 	}
 }
 
+func encodeByteSlice(e *encodeState, name string, value reflect.Value) {
+	e.writeKindName(kindBinary, name)
+	b := value.Interface().([]byte)
+	wire.PutUint32(e.buf[:4], uint32(len(b)))
+	e.Write(e.buf[:4])
+	e.WriteByte(0)
+	e.Write(b)
+}
+
 func encodeArrayOrSlice(e *encodeState, name string, value reflect.Value) {
-	t := value.Type().(reflect.ArrayOrSliceType)
-	if t.Elem().Kind() == reflect.Uint8 {
-		b := value.Interface().([]byte)
-		e.WriteByte(kindBinary)
-		e.WriteString(name)
-		e.WriteByte(0)
-		wire.PutUint32(e.buf[:4], uint32(len(b)))
-		e.Write(e.buf[:4])
-		e.WriteByte(0)
-		e.Write(b)
-	} else {
-		v := value.(reflect.ArrayOrSliceValue)
-		e.WriteByte(kindArray)
-		e.WriteString(name)
-		e.WriteByte(0)
-		offset := e.beginDoc()
-		n := v.Len()
-		for i := 0; i < n; i++ {
-			e.encodeValue(strconv.Itoa(i), v.Elem(i))
-		}
-		e.WriteByte(0)
-		e.endDoc(offset)
+	e.writeKindName(kindArray, name)
+	offset := e.beginDoc()
+	v := value.(reflect.ArrayOrSliceValue)
+	n := v.Len()
+	for i := 0; i < n; i++ {
+		e.encodeValue(strconv.Itoa(i), v.Elem(i))
 	}
+	e.WriteByte(0)
+	e.endDoc(offset)
 }
 
 func encodeInterfaceOrPtr(e *encodeState, name string, value reflect.Value) {
 	v := value.(interfaceOrPtrValue)
-	if v.IsNil() {
-		e.WriteByte(kindNull)
-		e.WriteString(name)
-		e.WriteByte(0)
-		return
+	if !v.IsNil() {
+		e.encodeValue(name, v.Elem())
 	}
-	e.encodeValue(name, v.Elem())
 }
 
 type encoderFunc func(e *encodeState, name string, v reflect.Value)
@@ -318,11 +284,9 @@ func init() {
 		reflect.Float32:   encodeFloat,
 		reflect.Float64:   encodeFloat,
 		reflect.Float:     encodeFloat,
-		reflect.Int16:     encodeInt,
 		reflect.Int32:     encodeInt,
-		reflect.Int64:     func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindInt64, name, value) },
-		reflect.Int8:      encodeInt,
 		reflect.Int:       encodeInt,
+		reflect.Int64:     func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindInt64, name, value) },
 		reflect.Interface: encodeInterfaceOrPtr,
 		reflect.Map:       encodeMap,
 		reflect.Ptr:       encodeInterfaceOrPtr,
@@ -332,6 +296,7 @@ func init() {
 	}
 	typeEncoder = map[reflect.Type]encoderFunc{
 		typeCodeWithScope: encodeCodeWithScope,
+		typeTimestamp:     func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindTimestamp, name, value) },
 		typeDateTime:      func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindDateTime, name, value) },
 		typeKey:           encodeKey,
 		typeObjectId:      encodeObjectId,
@@ -339,5 +304,6 @@ func init() {
 		typeRegexp:        encodeRegexp,
 		typeSymbol:        func(e *encodeState, name string, value reflect.Value) { encodeString(e, kindSymbol, name, value) },
 		typeCode:          func(e *encodeState, name string, value reflect.Value) { encodeString(e, kindCode, name, value) },
+		typeByteSlice:     encodeByteSlice,
 	}
 }

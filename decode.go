@@ -26,13 +26,21 @@ var (
 	ErrEOD = os.NewError("bson: unexpected end of data")
 )
 
-type DecodeTypeError struct {
-	src  string
-	dest reflect.Type
+type DecodeConvertError struct {
+	kind int
+	t    reflect.Type
 }
 
-func (d *DecodeTypeError) String() string {
-	return "bson: could not decode " + d.src + " to " + d.dest.String()
+func (e *DecodeConvertError) String() string {
+	return "bson: could not decode " + kindName(e.kind) + " to " + e.t.String()
+}
+
+type DecodeTypeError struct {
+	kind int
+}
+
+func (e *DecodeTypeError) String() string {
+	return "bson: could not decode " + kindName(e.kind)
 }
 
 func Decode(data []byte, v interface{}) (err os.Error) {
@@ -51,7 +59,7 @@ func Decode(data []byte, v interface{}) (err os.Error) {
 	if !ok || pv.IsNil() {
 		return os.NewError("bson: decode arg must be pointer")
 	}
-	d.decodeDocument(d.indirect(pv.Elem(), false))
+	d.decodeValue(kindDocument, pv.Elem())
 	return d.savedError
 }
 
@@ -62,16 +70,24 @@ type decodeState struct {
 	savedError os.Error
 }
 
-// error aborts the decoding by panicking with err.
-func (d *decodeState) error(err os.Error) {
+// abort by panicking with err.
+func (d *decodeState) abort(err os.Error) {
 	panic(err)
 }
 
-// saveError saves the first err it is called with,
-// for reporting at the end of the unmarshal.
+// saveError saves the first err it is called with, for reporting at the end of
+// Decode.
 func (d *decodeState) saveError(err os.Error) {
 	if d.savedError == nil {
 		d.savedError = err
+	}
+}
+
+// saveErrorAndSkip skips the value and saves a conversion error.
+func (d *decodeState) saveErrorAndSkip(kind int, t reflect.Type) {
+	d.skipValue(kind)
+	if d.savedError == nil {
+		d.savedError = &DecodeConvertError{kind, t}
 	}
 }
 
@@ -86,15 +102,6 @@ func (d *decodeState) compileStruct(t *reflect.StructType) map[string]reflect.St
 	return m
 }
 
-func (d *decodeState) scanSlice(n int) []byte {
-	if n+d.offset > len(d.data) {
-		d.error(ErrEOD)
-	}
-	p := d.data[d.offset : d.offset+n]
-	d.offset += n
-	return p
-}
-
 func (d *decodeState) beginDoc() int {
 	offset := d.offset
 	offset += int(wire.Uint32(d.scanSlice(4)))
@@ -103,13 +110,22 @@ func (d *decodeState) beginDoc() int {
 
 func (d *decodeState) endDoc(offset int) {
 	if d.offset != offset {
-		d.error(os.NewError("bson: doc length wrong"))
+		d.abort(os.NewError("bson: doc length wrong"))
 	}
+}
+
+func (d *decodeState) scanSlice(n int) []byte {
+	if n+d.offset > len(d.data) {
+		d.abort(ErrEOD)
+	}
+	p := d.data[d.offset : d.offset+n]
+	d.offset += n
+	return p
 }
 
 func (d *decodeState) scanKindName() (int, []byte) {
 	if d.offset >= len(d.data) {
-		d.error(ErrEOD)
+		d.abort(ErrEOD)
 	}
 	kind := int(d.data[d.offset])
 	d.offset += 1
@@ -118,7 +134,7 @@ func (d *decodeState) scanKindName() (int, []byte) {
 	}
 	n := bytes.IndexByte(d.data[d.offset:], 0)
 	if n < 0 {
-		d.error(ErrEOD)
+		d.abort(ErrEOD)
 	}
 	p := d.data[d.offset : d.offset+n]
 	d.offset = d.offset + n + 1
@@ -162,67 +178,184 @@ func (d *decodeState) scanInt64() int64 {
 	return int64(wire.Uint64(d.scanSlice(8)))
 }
 
-func (d *decodeState) decodeDocument(v reflect.Value) {
-	switch v := v.(type) {
-	case *reflect.InterfaceValue:
-		m := make(map[string]interface{})
-		v.Set(reflect.NewValue(m))
-		d.decodeDocumentInterface(m)
-	case *reflect.MapValue:
-		d.decodeDocumentMap(v)
-	case *reflect.StructValue:
-		d.decodeDocumentStruct(v)
-	default:
-		d.saveError(&DecodeTypeError{"document", v.Type()})
-	}
-}
-
-func (d *decodeState) decodeDocumentMap(v *reflect.MapValue) {
-	offset := d.beginDoc()
-	t := v.Type().(*reflect.MapType)
-	if t.Key() != typeString {
-		d.saveError(&DecodeTypeError{"object", v.Type()})
-		return
-	}
-	if v.IsNil() {
-		v.SetValue(reflect.MakeMap(t))
-	}
-	if t.Elem() == typeEmptyInterface {
-		d.decodeDocumentInterface(v.Interface().(map[string]interface{}))
-	} else {
-		for {
-			kind, name := d.scanKindName()
-			if kind == 0 {
-				break
-			}
-			subv := reflect.MakeZero(t.Elem())
-			d.decodeValue(kind, subv)
-			v.SetElem(reflect.NewValue(string(name)), subv)
+func (d *decodeState) decodeValue(kind int, v reflect.Value) {
+	v = d.indirect(v)
+	t := v.Type()
+	decoder, ok := typeDecoder[t]
+	if !ok {
+		decoder, ok = kindDecoder[t.Kind()]
+		if !ok {
+			d.saveErrorAndSkip(kind, v.Type())
+			return
 		}
 	}
-	d.endDoc(offset)
+	decoder(d, kind, v)
 }
 
-func (d *decodeState) decodeDocumentStruct(v *reflect.StructValue) {
-	offset := d.beginDoc()
-	m := d.compileStruct(v.Type().(*reflect.StructType))
+// indirect walks down v allocating pointers as needed, until it gets to a
+// non-pointer.  
+func (d *decodeState) indirect(v reflect.Value) reflect.Value {
 	for {
-		kind, p := d.scanKindName()
-		if kind == 0 {
+		if iv, ok := v.(*reflect.InterfaceValue); ok && !iv.IsNil() {
+			v = iv.Elem()
+			continue
+		}
+		pv, ok := v.(*reflect.PtrValue)
+		if !ok {
 			break
 		}
-		name := string(p)
-		if f, ok := m[name]; ok {
-			subv := v.FieldByIndex(f.Index)
-			d.decodeValue(kind, subv)
-		} else {
-			d.skipValue(kind)
+		if pv.IsNil() {
+			pv.PointTo(reflect.MakeZero(pv.Type().(*reflect.PtrType).Elem()))
 		}
+		v = pv.Elem()
 	}
-	d.endDoc(offset)
+	return v
 }
 
-func (d *decodeState) decodeDocumentInterface(m map[string]interface{}) {
+func decodeFloat(d *decodeState, kind int, value reflect.Value) {
+	var f float64
+	switch kind {
+	default:
+		d.saveErrorAndSkip(kind, value.Type())
+		return
+	case kindFloat:
+		f = d.scanFloat()
+	case kindInt64:
+		f = float64(d.scanInt64())
+	case kindInt32:
+		f = float64(d.scanInt32())
+	}
+	v := value.(*reflect.FloatValue)
+	if v.Overflow(f) {
+		d.saveError(&DecodeConvertError{kind, v.Type()})
+		return
+	}
+	v.Set(f)
+}
+
+func decodeInt(d *decodeState, kind int, value reflect.Value) {
+	var n int64
+	switch kind {
+	default:
+		d.saveErrorAndSkip(kind, value.Type())
+		return
+	case kindInt64, kindTimestamp, kindDateTime:
+		n = d.scanInt64()
+	case kindInt32:
+		n = int64(d.scanInt32())
+	case kindFloat:
+		n = int64(d.scanFloat())
+	}
+	v := value.(*reflect.IntValue)
+	if v.Overflow(n) {
+		d.saveError(&DecodeConvertError{kind, v.Type()})
+		return
+	}
+	v.Set(n)
+}
+
+func decodeTimestamp(d *decodeState, kind int, value reflect.Value) {
+	switch kind {
+	default:
+		d.saveErrorAndSkip(kind, value.Type())
+		return
+	case kindInt64, kindTimestamp:
+		decodeInt(d, kindInt64, value)
+	}
+}
+
+func decodeDateTime(d *decodeState, kind int, value reflect.Value) {
+	switch kind {
+	default:
+		d.saveErrorAndSkip(kind, value.Type())
+		return
+	case kindInt64, kindDateTime:
+		decodeInt(d, kindInt64, value)
+	}
+}
+
+func decodeString(d *decodeState, kind int, value reflect.Value) {
+	var s string
+	switch kind {
+	default:
+		d.saveErrorAndSkip(kind, value.Type())
+		return
+	case kindString, kindSymbol, kindCode:
+		s = d.scanString()
+	}
+	value.(*reflect.StringValue).Set(s)
+}
+
+func decodeObjectId(d *decodeState, kind int, value reflect.Value) {
+	var p []byte
+	switch kind {
+	default:
+		d.saveErrorAndSkip(kind, value.Type())
+		return
+	case kindObjectId:
+		p = d.scanSlice(12)
+	}
+	reflect.ArrayCopy(value.(reflect.ArrayOrSliceValue), reflect.NewValue(p).(reflect.ArrayOrSliceValue))
+}
+
+func decodeByteSlice(d *decodeState, kind int, value reflect.Value) {
+	var p []byte
+	switch kind {
+	default:
+		d.saveErrorAndSkip(kind, value.Type())
+		return
+	case kindBinary:
+		p, _ = d.scanBinary()
+	}
+	v := value.(*reflect.SliceValue)
+	if v.IsNil() || v.Cap() < len(p) {
+		v.Set(reflect.MakeSlice(v.Type().(*reflect.SliceType), len(p), len(p)))
+	} else {
+		v.SetLen(len(p))
+	}
+	reflect.ArrayCopy(v, reflect.NewValue(p).(reflect.ArrayOrSliceValue))
+}
+
+func decodeBool(d *decodeState, kind int, value reflect.Value) {
+	var b bool
+	switch kind {
+	default:
+		d.saveErrorAndSkip(kind, value.Type())
+		return
+	case kindBool:
+		b = d.scanBool()
+	case kindInt32:
+		b = d.scanInt32() != 0
+	case kindInt64:
+		b = d.scanInt64() != 0
+	}
+	value.(*reflect.BoolValue).Set(b)
+}
+
+func decodeKey(d *decodeState, kind int, value reflect.Value) {
+	var n int64
+	switch kind {
+	default:
+		d.saveError(&DecodeConvertError{kind, value.Type()})
+		return
+	case kindMaxKey:
+		n = 1
+	case kindMinKey:
+		n = -1
+	}
+	value.(*reflect.IntValue).Set(n)
+}
+
+func decodeMapStringInterface(d *decodeState, kind int, value reflect.Value) {
+	if kind != kindDocument {
+		d.saveErrorAndSkip(kind, value.Type())
+	}
+	v := value.(*reflect.MapValue)
+	if v.IsNil() {
+		t := v.Type().(*reflect.MapType)
+		v.SetValue(reflect.MakeMap(t))
+	}
+	m := v.Interface().(map[string]interface{})
 	offset := d.beginDoc()
 	for {
 		kind, name := d.scanKindName()
@@ -234,184 +367,54 @@ func (d *decodeState) decodeDocumentInterface(m map[string]interface{}) {
 	d.endDoc(offset)
 }
 
-func (d *decodeState) decodeValue(kind int, v reflect.Value) {
-	v = d.indirect(v, kind == kindNull)
-
-	switch kind {
-	case kindFloat:
-		f := d.scanFloat()
-		switch v := v.(type) {
-		default:
-			d.saveError(&DecodeTypeError{"float", v.Type()})
-		case *reflect.FloatValue:
-			if v.Overflow(f) {
-				d.saveError(&DecodeTypeError{"float", v.Type()})
-				break
-			}
-			v.Set(f)
-		case *reflect.IntValue:
-			n := int64(f)
-			if v.Overflow(n) {
-				d.saveError(&DecodeTypeError{"float", v.Type()})
-				break
-			}
-			v.Set(n)
-		case *reflect.InterfaceValue:
-			v.Set(reflect.NewValue(f))
-		}
-	case kindString:
-		s := d.scanString()
-		switch v := v.(type) {
-		default:
-			d.saveError(&DecodeTypeError{"string", v.Type()})
-		case *reflect.StringValue:
-			v.Set(s)
-		case *reflect.InterfaceValue:
-			v.Set(reflect.NewValue(s))
-		}
-	case kindSymbol:
-		s := d.scanString()
-		switch v := v.(type) {
-		default:
-			d.saveError(&DecodeTypeError{"symbol", v.Type()})
-		case *reflect.StringValue:
-			v.Set(s)
-		case *reflect.InterfaceValue:
-			v.Set(reflect.NewValue(Symbol(s)))
-		}
-	case kindDocument:
-		d.decodeDocument(v)
-	case kindArray:
-		d.error(os.NewError("array not supported yet"))
-	case kindBinary:
-		p, _ := d.scanBinary()
-		switch v := v.(type) {
-		default:
-			d.saveError(&DecodeTypeError{"binary", v.Type()})
-		case *reflect.InterfaceValue:
-			newp := make([]byte, len(p))
-			copy(newp, p)
-			v.Set(reflect.NewValue(newp))
-		case *reflect.SliceValue:
-			t := v.Type().(*reflect.SliceType)
-			if t.Elem().Kind() != reflect.Uint8 {
-				d.saveError(&DecodeTypeError{"binary", v.Type()})
-				break
-			}
-			if v.IsNil() || v.Len() < len(p) {
-				v.Set(reflect.MakeSlice(t, len(p), len(p)))
-			} else {
-				v.SetLen(len(p))
-			}
-			reflect.ArrayCopy(v, reflect.NewValue(p).(reflect.ArrayOrSliceValue))
-		}
-
-	case kindObjectId:
-		p := d.scanSlice(12)
-		switch v := v.(type) {
-		default:
-			d.saveError(&DecodeTypeError{"objectid", v.Type()})
-		case *reflect.ArrayValue:
-			t := v.Type().(*reflect.ArrayType)
-			if t.Elem().Kind() != reflect.Uint8 || t.Len() != 12 {
-				d.saveError(&DecodeTypeError{"objectid", v.Type()})
-				break
-			}
-			reflect.ArrayCopy(v, reflect.NewValue(p).(reflect.ArrayOrSliceValue))
-		case *reflect.InterfaceValue:
-			oid := ObjectId{}
-			copy(oid[:], p)
-			v.Set(reflect.NewValue(oid))
-		}
-	case kindBool:
-		b := d.scanBool()
-		switch v := v.(type) {
-		default:
-			d.saveError(&DecodeTypeError{"bool", v.Type()})
-		case *reflect.BoolValue:
-			v.Set(b)
-		case *reflect.InterfaceValue:
-			v.Set(reflect.NewValue(b))
-		}
-	case kindNull:
-		switch v.(type) {
-		default:
-			d.saveError(&DecodeTypeError{"null", v.Type()})
-		case *reflect.InterfaceValue, *reflect.PtrValue, *reflect.MapValue:
-			v.SetValue(nil)
-		}
-	case kindInt32:
-		n := d.scanInt32()
-		switch v := v.(type) {
-		default:
-			d.error(&DecodeTypeError{"int32", v.Type()})
-		case *reflect.IntValue:
-			n := int64(n)
-			if v.Overflow(n) {
-				d.saveError(&DecodeTypeError{"int32", v.Type()})
-				break
-			}
-			v.Set(n)
-		case *reflect.InterfaceValue:
-			v.Set(reflect.NewValue(n))
-		case *reflect.FloatValue:
-			v.Set(float64(n))
-		}
-	case kindInt64:
-		n := d.scanInt64()
-		switch v := v.(type) {
-		default:
-			d.error(&DecodeTypeError{"int64", v.Type()})
-		case *reflect.IntValue:
-			if v.Overflow(n) {
-				d.saveError(&DecodeTypeError{"int64", v.Type()})
-				break
-			}
-			v.Set(n)
-		case *reflect.InterfaceValue:
-			v.Set(reflect.NewValue(n))
-		case *reflect.FloatValue:
-			v.Set(float64(n))
-		}
-	case kindTimestamp:
-		n := d.scanInt64()
-		switch v := v.(type) {
-		default:
-			d.error(&DecodeTypeError{"timestamp", v.Type()})
-		case *reflect.IntValue:
-			if v.Overflow(n) {
-				d.saveError(&DecodeTypeError{"timestamp", v.Type()})
-				break
-			}
-			v.Set(n)
-		case *reflect.InterfaceValue:
-			v.Set(reflect.NewValue(Timestamp(n)))
-		case *reflect.FloatValue:
-			v.Set(float64(n))
-		}
-	case kindDateTime:
-		n := d.scanInt64()
-		switch v := v.(type) {
-		default:
-			d.error(&DecodeTypeError{"timestamp", v.Type()})
-		case *reflect.IntValue:
-			if v.Overflow(n) {
-				d.saveError(&DecodeTypeError{"timestamp", v.Type()})
-				break
-			}
-			v.Set(n)
-		case *reflect.InterfaceValue:
-			v.Set(reflect.NewValue(DateTime(n)))
-		case *reflect.FloatValue:
-			v.Set(float64(n))
-		}
-	case kindMinKey:
-	case kindMaxKey:
-	default:
-		d.error(os.NewError("bson: unknown type"))
+func decodeMap(d *decodeState, kind int, value reflect.Value) {
+	t := value.Type().(*reflect.MapType)
+	if t.Key() != typeString || kind != kindDocument {
+		d.saveErrorAndSkip(kind, value.Type())
+		return
 	}
+	v := value.(*reflect.MapValue)
+	if v.IsNil() {
+		v.SetValue(reflect.MakeMap(t))
+	}
+	offset := d.beginDoc()
+	for {
+		kind, name := d.scanKindName()
+		if kind == 0 {
+			break
+		}
+		subv := reflect.MakeZero(t.Elem())
+		d.decodeValue(kind, subv)
+		v.SetElem(reflect.NewValue(string(name)), subv)
+	}
+	d.endDoc(offset)
 }
 
+func decodeStruct(d *decodeState, kind int, value reflect.Value) {
+	v := value.(*reflect.StructValue)
+	t := v.Type().(*reflect.StructType)
+	m := d.compileStruct(t)
+	offset := d.beginDoc()
+	for {
+		kind, name := d.scanKindName()
+		if kind == 0 {
+			break
+		}
+		if kind == kindNull {
+			continue
+		}
+		if f, ok := m[string(name)]; ok {
+			d.decodeValue(kind, v.FieldByIndex(f.Index))
+		} else {
+			d.skipValue(kind)
+		}
+	}
+	d.endDoc(offset)
+}
+
+func decodeAny(d *decodeState, kind int, value reflect.Value) {
+	value.(*reflect.InterfaceValue).Set(reflect.NewValue(d.decodeValueInterface(kind)))
+}
 
 func (d *decodeState) decodeValueInterface(kind int) interface{} {
 	switch kind {
@@ -421,15 +424,23 @@ func (d *decodeState) decodeValueInterface(kind int) interface{} {
 		return d.scanString()
 	case kindDocument:
 		m := make(map[string]interface{})
-		d.decodeDocumentInterface(m)
+		offset := d.beginDoc()
+		for {
+			kind, name := d.scanKindName()
+			if kind == 0 {
+				break
+			}
+			m[string(name)] = d.decodeValueInterface(kind)
+		}
+		d.endDoc(offset)
 		return m
 	case kindArray:
-		d.error(os.NewError("array not supported yet"))
+		d.abort(os.NewError("array not supported yet"))
 	case kindBinary:
 		p, _ := d.scanBinary()
 		newp := make([]byte, len(p))
 		copy(newp, p)
-		return p
+		return newp
 	case kindObjectId:
 		p := d.scanSlice(12)
 		oid := ObjectId{}
@@ -454,15 +465,13 @@ func (d *decodeState) decodeValueInterface(kind int) interface{} {
 	case kindMaxKey:
 		return MaxKey
 	default:
-		d.error(os.NewError("bson: unknown type"))
+		d.abort(&DecodeTypeError{kind})
 	}
 	return nil
 }
 
 func (d *decodeState) skipValue(kind int) {
 	switch kind {
-	case kindFloat:
-		d.offset += 8
 	case kindString, kindSymbol:
 		n := int(d.scanInt32())
 		d.offset += n
@@ -476,37 +485,43 @@ func (d *decodeState) skipValue(kind int) {
 		d.offset += 12
 	case kindBool:
 		d.offset += 1
-	case kindDateTime, kindTimestamp, kindInt64:
+	case kindDateTime, kindTimestamp, kindInt64, kindFloat:
 		d.offset += 8
 	case kindInt32:
 		d.offset += 4
 	case kindMinKey, kindMaxKey, kindNull:
 		d.offset += 0
 	default:
-		d.error(os.NewError("bson: unknown type"))
+		d.abort(&DecodeTypeError{kind})
 	}
 }
 
-// indirect walks down v allocating pointers as needed, until it gets to a
-// non-pointer.  If wantptr is true, indirect stops at the last pointer.
-func (d *decodeState) indirect(v reflect.Value, wantptr bool) reflect.Value {
-	for {
-		if iv, ok := v.(*reflect.InterfaceValue); ok && !iv.IsNil() {
-			v = iv.Elem()
-			continue
-		}
-		pv, ok := v.(*reflect.PtrValue)
-		if !ok {
-			break
-		}
-		_, isptrptr := pv.Elem().(*reflect.PtrValue)
-		if !isptrptr && wantptr {
-			return pv
-		}
-		if pv.IsNil() {
-			pv.PointTo(reflect.MakeZero(pv.Type().(*reflect.PtrType).Elem()))
-		}
-		v = pv.Elem()
+type decoderFunc func(e *decodeState, kind int, v reflect.Value)
+
+var kindDecoder map[reflect.Kind]decoderFunc
+var typeDecoder map[reflect.Type]decoderFunc
+
+func init() {
+	kindDecoder = map[reflect.Kind]decoderFunc{
+		reflect.Bool:      decodeBool,
+		reflect.Float32:   decodeFloat,
+		reflect.Float64:   decodeFloat,
+		reflect.Float:     decodeFloat,
+		reflect.Int32:     decodeInt,
+		reflect.Int64:     decodeInt,
+		reflect.Int:       decodeInt,
+		reflect.Map:       decodeMap,
+		reflect.String:    decodeString,
+		reflect.Struct:    decodeStruct,
+		reflect.Interface: decodeAny,
 	}
-	return v
+	typeDecoder = map[reflect.Type]decoderFunc{
+		typeDateTime:           decodeDateTime,
+		typeTimestamp:          decodeTimestamp,
+		typeKey:                decodeKey,
+		typeObjectId:           decodeObjectId,
+		typeSymbol:             decodeString,
+		typeByteSlice:          decodeByteSlice,
+		typeMapStringInterface: decodeMapStringInterface,
+	}
 }

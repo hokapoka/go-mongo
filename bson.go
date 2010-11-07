@@ -18,6 +18,7 @@ import (
 	"encoding/binary"
 	"reflect"
 	"strings"
+	"strconv"
 )
 
 var wire = binary.LittleEndian
@@ -57,16 +58,19 @@ const (
 )
 
 var (
-	typeDateTime       = reflect.Typeof(DateTime(0))
-	typeCodeWithScope  = reflect.Typeof(CodeWithScope{})
-	typeRegexp         = reflect.Typeof(Regexp{})
-	typeObjectId       = reflect.Typeof(ObjectId{})
-	typeOrderedMap     = reflect.Typeof(OrderedMap{})
-	typeKey            = reflect.Typeof(MaxKey)
-	typeCode           = reflect.Typeof(Code(""))
-	typeSymbol         = reflect.Typeof(Symbol(""))
-	typeString         = reflect.Typeof("")
-	typeEmptyInterface = reflect.Typeof(interface{}(nil))
+	typeDateTime           = reflect.Typeof(DateTime(0))
+	typeTimestamp          = reflect.Typeof(Timestamp(0))
+	typeCodeWithScope      = reflect.Typeof(CodeWithScope{})
+	typeRegexp             = reflect.Typeof(Regexp{})
+	typeObjectId           = reflect.Typeof(ObjectId{})
+	typeOrderedMap         = reflect.Typeof(OrderedMap{})
+	typeKey                = reflect.Typeof(MaxKey)
+	typeCode               = reflect.Typeof(Code(""))
+	typeSymbol             = reflect.Typeof(Symbol(""))
+	typeString             = reflect.Typeof("")
+	typeAny                = reflect.Typeof(interface{}(nil))
+	typeByteSlice          = reflect.Typeof([]byte{})
+	typeMapStringInterface = reflect.Typeof(make(map[string]interface{}))
 )
 
 const (
@@ -90,12 +94,33 @@ const (
 	kindMaxKey        = 0x7f
 )
 
-type UnsupportedTypeError struct {
-	Type reflect.Type
+var kindNames = map[int]string{
+	kindFloat:         "float",
+	kindString:        "string",
+	kindDocument:      "document",
+	kindArray:         "array",
+	kindBinary:        "binary",
+	kindObjectId:      "objectId",
+	kindBool:          "bool",
+	kindDateTime:      "dateTime",
+	kindNull:          "null",
+	kindRegexp:        "regexp",
+	kindCode:          "code",
+	kindSymbol:        "symbol",
+	kindCodeWithScope: "codeWithScope",
+	kindInt32:         "int32",
+	kindTimestamp:     "timestamp",
+	kindInt64:         "int64",
+	kindMinKey:        "minKey",
+	kindMaxKey:        "maxKey",
 }
 
-func (e *UnsupportedTypeError) String() string {
-	return "bson: unsupported type: " + e.Type.String()
+func kindName(kind int) string {
+	name, ok := kindNames[kind]
+	if !ok {
+		name = strconv.Itoa(kind)
+	}
+	return name
 }
 
 func fieldName(f reflect.StructField) string {
