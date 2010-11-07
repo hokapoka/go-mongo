@@ -196,10 +196,12 @@ func (d *decodeState) decodeValue(kind int, v reflect.Value) {
 // non-pointer.  
 func (d *decodeState) indirect(v reflect.Value) reflect.Value {
 	for {
-		if iv, ok := v.(*reflect.InterfaceValue); ok && !iv.IsNil() {
-			v = iv.Elem()
-			continue
-		}
+		/*
+			if iv, ok := v.(*reflect.InterfaceValue); ok && !iv.IsNil() {
+				v = iv.Elem()
+				continue
+			}
+		*/
 		pv, ok := v.(*reflect.PtrValue)
 		if !ok {
 			break
