@@ -58,19 +58,18 @@ const (
 )
 
 var (
-	typeDateTime           = reflect.Typeof(DateTime(0))
-	typeTimestamp          = reflect.Typeof(Timestamp(0))
+	typeByteSlice          = reflect.Typeof([]byte{})
+	typeCode               = reflect.Typeof(Code(""))
 	typeCodeWithScope      = reflect.Typeof(CodeWithScope{})
-	typeRegexp             = reflect.Typeof(Regexp{})
+	typeDateTime           = reflect.Typeof(DateTime(0))
+	typeKey                = reflect.Typeof(MaxKey)
+	typeMapStringInterface = reflect.Typeof(make(map[string]interface{}))
 	typeObjectId           = reflect.Typeof(ObjectId{})
 	typeOrderedMap         = reflect.Typeof(OrderedMap{})
-	typeKey                = reflect.Typeof(MaxKey)
-	typeCode               = reflect.Typeof(Code(""))
-	typeSymbol             = reflect.Typeof(Symbol(""))
+	typeRegexp             = reflect.Typeof(Regexp{})
 	typeString             = reflect.Typeof("")
-	typeAny                = reflect.Typeof(interface{}(nil))
-	typeByteSlice          = reflect.Typeof([]byte{})
-	typeMapStringInterface = reflect.Typeof(make(map[string]interface{}))
+	typeSymbol             = reflect.Typeof(Symbol(""))
+	typeTimestamp          = reflect.Typeof(Timestamp(0))
 )
 
 const (

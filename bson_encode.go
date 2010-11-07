@@ -285,8 +285,8 @@ func init() {
 		reflect.Float64:   encodeFloat,
 		reflect.Float:     encodeFloat,
 		reflect.Int32:     encodeInt,
-		reflect.Int:       encodeInt,
 		reflect.Int64:     func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindInt64, name, value) },
+		reflect.Int:       encodeInt,
 		reflect.Interface: encodeInterfaceOrPtr,
 		reflect.Map:       encodeMap,
 		reflect.Ptr:       encodeInterfaceOrPtr,
@@ -295,15 +295,15 @@ func init() {
 		reflect.Struct:    encodeStruct,
 	}
 	typeEncoder = map[reflect.Type]encoderFunc{
+		typeByteSlice:     encodeByteSlice,
+		typeCode:          func(e *encodeState, name string, value reflect.Value) { encodeString(e, kindCode, name, value) },
 		typeCodeWithScope: encodeCodeWithScope,
-		typeTimestamp:     func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindTimestamp, name, value) },
 		typeDateTime:      func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindDateTime, name, value) },
 		typeKey:           encodeKey,
 		typeObjectId:      encodeObjectId,
 		typeOrderedMap:    encodeOrderedMap,
 		typeRegexp:        encodeRegexp,
 		typeSymbol:        func(e *encodeState, name string, value reflect.Value) { encodeString(e, kindSymbol, name, value) },
-		typeCode:          func(e *encodeState, name string, value reflect.Value) { encodeString(e, kindCode, name, value) },
-		typeByteSlice:     encodeByteSlice,
+		typeTimestamp:     func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindTimestamp, name, value) },
 	}
 }

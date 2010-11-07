@@ -19,7 +19,7 @@ GOFILES=\
     mongo.go\
     connection.go\
     bson.go\
-    decode.go\
-    encode.go\
+    bson_decode.go\
+    bson_encode.go\
 
 include $(GOROOT)/src/Make.pkg

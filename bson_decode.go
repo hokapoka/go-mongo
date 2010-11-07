@@ -510,18 +510,18 @@ func init() {
 		reflect.Int32:     decodeInt,
 		reflect.Int64:     decodeInt,
 		reflect.Int:       decodeInt,
+		reflect.Interface: decodeAny,
 		reflect.Map:       decodeMap,
 		reflect.String:    decodeString,
 		reflect.Struct:    decodeStruct,
-		reflect.Interface: decodeAny,
 	}
 	typeDecoder = map[reflect.Type]decoderFunc{
+		typeByteSlice:          decodeByteSlice,
 		typeDateTime:           decodeDateTime,
-		typeTimestamp:          decodeTimestamp,
 		typeKey:                decodeKey,
+		typeMapStringInterface: decodeMapStringInterface,
 		typeObjectId:           decodeObjectId,
 		typeSymbol:             decodeString,
-		typeByteSlice:          decodeByteSlice,
-		typeMapStringInterface: decodeMapStringInterface,
+		typeTimestamp:          decodeTimestamp,
 	}
 }
