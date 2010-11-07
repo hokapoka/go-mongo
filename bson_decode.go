@@ -390,6 +390,61 @@ func decodeMap(d *decodeState, kind int, value reflect.Value) {
 	d.endDoc(offset)
 }
 
+func decodeSlice(d *decodeState, kind int, value reflect.Value) {
+	if kind != kindArray {
+		d.saveErrorAndSkip(kind, value.Type())
+		return
+	}
+	v := value.(*reflect.SliceValue)
+	t := v.Type().(*reflect.SliceType)
+	offset := d.beginDoc()
+	i := 0
+	for {
+		kind, _ := d.scanKindName()
+		if kind == 0 {
+			break
+		}
+		if i >= v.Cap() {
+			newcap := v.Cap() + v.Cap()/2
+			if newcap < 4 {
+				newcap = 4
+			}
+			newv := reflect.MakeSlice(t, v.Len(), newcap)
+			reflect.ArrayCopy(newv, v)
+			v.Set(newv)
+		}
+		if i >= v.Len() {
+			v.SetLen(i + 1)
+		}
+		d.decodeValue(kind, v.Elem(i))
+		i += 1
+	}
+	d.endDoc(offset)
+}
+
+func decodeArray(d *decodeState, kind int, value reflect.Value) {
+	if kind != kindArray {
+		d.saveErrorAndSkip(kind, value.Type())
+		return
+	}
+	v := value.(*reflect.ArrayValue)
+	offset := d.beginDoc()
+	i := 0
+	for {
+		kind, _ := d.scanKindName()
+		if kind == 0 {
+			break
+		}
+		if i < v.Len() {
+			d.decodeValue(kind, v.Elem(i))
+		} else {
+			d.skipValue(kind)
+		}
+		i += 1
+	}
+	d.endDoc(offset)
+}
+
 func decodeStruct(d *decodeState, kind int, value reflect.Value) {
 	v := value.(*reflect.StructValue)
 	t := v.Type().(*reflect.StructType)
@@ -435,7 +490,17 @@ func (d *decodeState) decodeValueInterface(kind int) interface{} {
 		d.endDoc(offset)
 		return m
 	case kindArray:
-		d.abort(os.NewError("array not supported yet"))
+		var a []interface{}
+		offset := d.beginDoc()
+		for {
+			kind, _ := d.scanKindName()
+			if kind == 0 {
+				break
+			}
+			a = append(a, d.decodeValueInterface(kind))
+		}
+		d.endDoc(offset)
+		return a
 	case kindBinary:
 		p, _ := d.scanBinary()
 		newp := make([]byte, len(p))
@@ -514,6 +579,8 @@ func init() {
 		reflect.Map:       decodeMap,
 		reflect.String:    decodeString,
 		reflect.Struct:    decodeStruct,
+		reflect.Slice:     decodeSlice,
+		reflect.Array:     decodeArray,
 	}
 	typeDecoder = map[reflect.Type]decoderFunc{
 		typeByteSlice:          decodeByteSlice,

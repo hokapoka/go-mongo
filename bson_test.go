@@ -86,6 +86,14 @@ type stAny struct {
 	Test interface{}
 }
 
+type stStringSlice struct {
+	Test []string
+}
+
+type stStringArray struct {
+	Test [1]string
+}
+
 var bsonTests = []struct {
 	psv  interface{}
 	sv   interface{}
@@ -129,6 +137,12 @@ var bsonTests = []struct {
 		[]byte("\x13\x00\x00\x00\x11test\x008\xbe\x1c\xff\x0f\x01\x00\x00\x00")},
 	{new(stDateTime), stDateTime{1168216211000}, testMap(DateTime(1168216211000)),
 		[]byte("\x13\x00\x00\x00\ttest\x008\xbe\x1c\xff\x0f\x01\x00\x00\x00")},
+	{new(stStringSlice), stStringSlice{[]string{}}, testMap([]interface{}{}),
+		[]byte("\x10\x00\x00\x00\x04test\x00\x05\x00\x00\x00\x00\x00")},
+	{new(stStringSlice), stStringSlice{[]string{"hello"}}, testMap([]interface{}{"hello"}),
+		[]byte("\x1d\x00\x00\x00\x04test\x00\x12\x00\x00\x00\x020\x00\x06\x00\x00\x00hello\x00\x00\x00")},
+	{new(stStringArray), stStringArray{[1]string{"hello"}}, testMap([]interface{}{"hello"}),
+		[]byte("\x1d\x00\x00\x00\x04test\x00\x12\x00\x00\x00\x020\x00\x06\x00\x00\x00hello\x00\x00\x00")},
 }
 
 func TestEncodeMap(t *testing.T) {
