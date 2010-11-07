@@ -23,6 +23,10 @@ import (
 	"strconv"
 )
 
+var (
+	typeOrderedMap = reflect.Typeof(OrderedMap{})
+)
+
 type EncodeTypeError struct {
 	Type reflect.Type
 }
@@ -295,15 +299,15 @@ func init() {
 		reflect.Struct:    encodeStruct,
 	}
 	typeEncoder = map[reflect.Type]encoderFunc{
-		typeByteSlice:     encodeByteSlice,
-		typeCode:          func(e *encodeState, name string, value reflect.Value) { encodeString(e, kindCode, name, value) },
-		typeCodeWithScope: encodeCodeWithScope,
-		typeDateTime:      func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindDateTime, name, value) },
-		typeKey:           encodeKey,
-		typeObjectId:      encodeObjectId,
-		typeOrderedMap:    encodeOrderedMap,
-		typeRegexp:        encodeRegexp,
-		typeSymbol:        func(e *encodeState, name string, value reflect.Value) { encodeString(e, kindSymbol, name, value) },
-		typeTimestamp:     func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindTimestamp, name, value) },
+		reflect.Typeof([]byte{}):        encodeByteSlice,
+		reflect.Typeof(Code("")):        func(e *encodeState, name string, value reflect.Value) { encodeString(e, kindCode, name, value) },
+		reflect.Typeof(CodeWithScope{}): encodeCodeWithScope,
+		reflect.Typeof(DateTime(0)):     func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindDateTime, name, value) },
+		reflect.Typeof(MaxKey):          encodeKey,
+		reflect.Typeof(ObjectId{}):      encodeObjectId,
+		typeOrderedMap:                  encodeOrderedMap,
+		reflect.Typeof(Regexp{}):        encodeRegexp,
+		reflect.Typeof(Symbol("")):      func(e *encodeState, name string, value reflect.Value) { encodeString(e, kindSymbol, name, value) },
+		reflect.Typeof(Timestamp(0)):    func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindTimestamp, name, value) },
 	}
 }

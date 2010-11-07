@@ -57,21 +57,6 @@ const (
 	MinKey Key = -1
 )
 
-var (
-	typeByteSlice          = reflect.Typeof([]byte{})
-	typeCode               = reflect.Typeof(Code(""))
-	typeCodeWithScope      = reflect.Typeof(CodeWithScope{})
-	typeDateTime           = reflect.Typeof(DateTime(0))
-	typeKey                = reflect.Typeof(MaxKey)
-	typeMapStringInterface = reflect.Typeof(make(map[string]interface{}))
-	typeObjectId           = reflect.Typeof(ObjectId{})
-	typeOrderedMap         = reflect.Typeof(OrderedMap{})
-	typeRegexp             = reflect.Typeof(Regexp{})
-	typeString             = reflect.Typeof("")
-	typeSymbol             = reflect.Typeof(Symbol(""))
-	typeTimestamp          = reflect.Typeof(Timestamp(0))
-)
-
 const (
 	kindFloat         = 0x1
 	kindString        = 0x2

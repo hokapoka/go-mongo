@@ -371,7 +371,7 @@ func decodeMapStringInterface(d *decodeState, kind int, value reflect.Value) {
 
 func decodeMap(d *decodeState, kind int, value reflect.Value) {
 	t := value.Type().(*reflect.MapType)
-	if t.Key() != typeString || kind != kindDocument {
+	if t.Key().Kind() != reflect.String || kind != kindDocument {
 		d.saveErrorAndSkip(kind, value.Type())
 		return
 	}
@@ -469,7 +469,7 @@ func decodeStruct(d *decodeState, kind int, value reflect.Value) {
 	d.endDoc(offset)
 }
 
-func decodeAny(d *decodeState, kind int, value reflect.Value) {
+func decodeInterface(d *decodeState, kind int, value reflect.Value) {
 	value.(*reflect.InterfaceValue).Set(reflect.NewValue(d.decodeValueInterface(kind)))
 }
 
@@ -577,7 +577,7 @@ func init() {
 		reflect.Int32:     decodeInt,
 		reflect.Int64:     decodeInt,
 		reflect.Int:       decodeInt,
-		reflect.Interface: decodeAny,
+		reflect.Interface: decodeInterface,
 		reflect.Map:       decodeMap,
 		reflect.String:    decodeString,
 		reflect.Struct:    decodeStruct,
@@ -585,12 +585,12 @@ func init() {
 		reflect.Array:     decodeArray,
 	}
 	typeDecoder = map[reflect.Type]decoderFunc{
-		typeByteSlice:          decodeByteSlice,
-		typeDateTime:           decodeDateTime,
-		typeKey:                decodeKey,
-		typeMapStringInterface: decodeMapStringInterface,
-		typeObjectId:           decodeObjectId,
-		typeSymbol:             decodeString,
-		typeTimestamp:          decodeTimestamp,
+		reflect.Typeof([]byte{}):                     decodeByteSlice,
+		reflect.Typeof(DateTime(0)):                  decodeDateTime,
+		reflect.Typeof(MaxKey):                       decodeKey,
+		reflect.Typeof(make(map[string]interface{})): decodeMapStringInterface,
+		reflect.Typeof(ObjectId{}):                   decodeObjectId,
+		reflect.Typeof(Symbol("")):                   decodeString,
+		reflect.Typeof(Timestamp(0)):                 decodeTimestamp,
 	}
 }
