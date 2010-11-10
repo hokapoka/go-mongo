@@ -147,12 +147,11 @@ var bsonTests = []struct {
 
 func TestEncodeMap(t *testing.T) {
 	for i, bt := range bsonTests {
-		var buf bytes.Buffer
-		err := Encode(&buf, bt.mv)
-		data := buf.Bytes()
+		var data []byte
+		data, err := Encode(data, bt.mv)
 		if err != nil {
 			t.Errorf("%d: error encoding %s: %s", i, bt.mv, err)
-		} else if !bytes.Equal(bt.data, buf.Bytes()) {
+		} else if !bytes.Equal(bt.data, data) {
 			t.Errorf("%d: doc=%s,\n  expected %q\n  actual   %q", i, bt.mv, bt.data, data)
 		}
 	}
@@ -160,12 +159,11 @@ func TestEncodeMap(t *testing.T) {
 
 func TestEncodeStruct(t *testing.T) {
 	for i, bt := range bsonTests {
-		var buf bytes.Buffer
-		err := Encode(&buf, bt.sv)
-		data := buf.Bytes()
+		var data []byte
+		data, err := Encode(data, bt.sv)
 		if err != nil {
 			t.Errorf("%d: error encoding %s: %s", i, bt.sv, err)
-		} else if !bytes.Equal(bt.data, buf.Bytes()) {
+		} else if !bytes.Equal(bt.data, data) {
 			t.Errorf("%d: doc=%s,\n  expected %q\n  actual   %q", i, bt.mv, bt.data, data)
 		}
 	}
@@ -206,12 +204,12 @@ func TestDecodeStruct(t *testing.T) {
 
 func TestEncodeOrderedMap(t *testing.T) {
 	m := OrderedMap{{"test", "hello world"}}
-	data := []byte("\x1b\x00\x00\x00\x02test\x00\f\x00\x00\x00hello world\x00\x00")
-	var buf bytes.Buffer
-	err := Encode(&buf, m)
+	expected := []byte("\x1b\x00\x00\x00\x02test\x00\f\x00\x00\x00hello world\x00\x00")
+	var actual []byte
+	actual, err := Encode(actual, m)
 	if err != nil {
 		t.Error("error encoding map %s", err)
-	} else if !bytes.Equal(data, buf.Bytes()) {
-		t.Errorf("  expected %q\n  actual   %q", data, buf.Bytes())
+	} else if !bytes.Equal(expected, actual) {
+		t.Errorf("  expected %q\n  actual   %q", expected, actual)
 	}
 }

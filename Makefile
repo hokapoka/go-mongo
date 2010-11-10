@@ -16,10 +16,17 @@ include $(GOROOT)/src/Make.inc
 
 TARG=github.com/garyburd/go-mongo
 GOFILES=\
-    mongo.go\
-    connection.go\
+    buffer.go\
     bson.go\
     bson_decode.go\
     bson_encode.go\
+    mongo.go\
+    connection.go\
 
+Junkk=\
+    mongo.go\
+    connection.go\
+    database.go\
+    collection.go\
+ 
 include $(GOROOT)/src/Make.pkg

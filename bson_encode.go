@@ -15,7 +15,6 @@
 package mongo
 
 import (
-	"bytes"
 	"math"
 	"os"
 	"reflect"
@@ -41,11 +40,10 @@ type interfaceOrPtrValue interface {
 }
 
 type encodeState struct {
-	*bytes.Buffer
-	buf [16]byte
+	buffer
 }
 
-func Encode(buf *bytes.Buffer, doc interface{}) (err os.Error) {
+func Encode(buf []byte, doc interface{}) (result []byte, err os.Error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if _, ok := r.(runtime.Error); ok {
@@ -60,7 +58,7 @@ func Encode(buf *bytes.Buffer, doc interface{}) (err os.Error) {
 		v = pv.Elem()
 	}
 
-	e := encodeState{Buffer: buf}
+	e := encodeState{buffer: buf}
 	switch v := v.(type) {
 	case *reflect.StructValue:
 		e.writeStruct(v)
@@ -70,10 +68,10 @@ func Encode(buf *bytes.Buffer, doc interface{}) (err os.Error) {
 		if v.Type() == typeOrderedMap {
 			e.writeOrderedMap(v.Interface().(OrderedMap))
 		} else {
-			return &EncodeTypeError{v.Type()}
+			return nil, &EncodeTypeError{v.Type()}
 		}
 	}
-	return nil
+	return e.buffer, nil
 }
 
 func (e *encodeState) abort(err os.Error) {
@@ -81,14 +79,14 @@ func (e *encodeState) abort(err os.Error) {
 }
 
 func (e *encodeState) beginDoc() (offset int) {
-	offset = len(e.Bytes())
-	e.Write(e.buf[:4]) // placeholder
+	offset = len(e.buffer)
+	e.buffer.Next(4)
 	return
 }
 
 func (e *encodeState) endDoc(offset int) {
-	n := len(e.Bytes()) - offset
-	wire.PutUint32(e.Bytes()[offset:offset+4], uint32(n))
+	n := len(e.buffer) - offset
+	wire.PutUint32(e.buffer[offset:offset+4], uint32(n))
 }
 
 func (e *encodeState) writeKindName(kind int, name string) {
@@ -159,27 +157,23 @@ func encodeBool(e *encodeState, name string, value reflect.Value) {
 
 func encodeInt(e *encodeState, name string, value reflect.Value) {
 	e.writeKindName(kindInt32, name)
-	wire.PutUint32(e.buf[:4], uint32(value.(*reflect.IntValue).Get()))
-	e.Write(e.buf[:4])
+	e.WriteUint32(uint32(value.(*reflect.IntValue).Get()))
 }
 
 func encodeInt64(e *encodeState, kind int, name string, value reflect.Value) {
 	e.writeKindName(kind, name)
-	wire.PutUint64(e.buf[:8], uint64(value.(*reflect.IntValue).Get()))
-	e.Write(e.buf[:8])
+	e.WriteUint64(uint64(value.(*reflect.IntValue).Get()))
 }
 
 func encodeFloat(e *encodeState, name string, value reflect.Value) {
 	e.writeKindName(kindFloat, name)
-	wire.PutUint64(e.buf[:8], math.Float64bits(value.(*reflect.FloatValue).Get()))
-	e.Write(e.buf[:8])
+	e.WriteUint64(math.Float64bits(value.(*reflect.FloatValue).Get()))
 }
 
 func encodeString(e *encodeState, kind int, name string, value reflect.Value) {
 	e.writeKindName(kind, name)
 	s := value.(*reflect.StringValue).Get()
-	wire.PutUint32(e.buf[:4], uint32(len(s)+1))
-	e.Write(e.buf[:4])
+	e.WriteUint32(uint32(len(s) + 1))
 	e.WriteString(s)
 	e.WriteByte(0)
 }
@@ -203,8 +197,7 @@ func encodeCodeWithScope(e *encodeState, name string, value reflect.Value) {
 	e.writeKindName(kindCodeWithScope, name)
 	c := value.Interface().(CodeWithScope)
 	offset := e.beginDoc()
-	wire.PutUint32(e.buf[:4], uint32(len(c.Code)+1))
-	e.Write(e.buf[:4])
+	e.WriteUint32(uint32(len(c.Code) + 1))
 	e.WriteString(c.Code)
 	e.WriteByte(0)
 	scopeOffset := e.beginDoc()
@@ -251,8 +244,7 @@ func encodeOrderedMap(e *encodeState, name string, value reflect.Value) {
 func encodeByteSlice(e *encodeState, name string, value reflect.Value) {
 	e.writeKindName(kindBinary, name)
 	b := value.Interface().([]byte)
-	wire.PutUint32(e.buf[:4], uint32(len(b)))
-	e.Write(e.buf[:4])
+	e.WriteUint32(uint32(len(b)))
 	e.WriteByte(0)
 	e.Write(b)
 }
