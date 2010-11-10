@@ -63,7 +63,7 @@ const (
 type Conn interface {
 	Close() os.Error
 	Update(namespace string, selector, update interface{}, flags int) os.Error
-	Insert(namespace string, documents []interface{}) os.Error
+	Insert(namespace string, documents ...interface{}) os.Error
 	Remove(namespace string, selector interface{}, flags int) os.Error
 	FindOne(namespace string, query, returnFieldSelector interface{}, flags int, result interface{}) os.Error
 }

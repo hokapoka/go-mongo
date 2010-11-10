@@ -71,7 +71,7 @@ func Dial(addr string) (Conn, os.Error) {
 	if strings.LastIndex(addr, ":") <= strings.LastIndex(addr, "]") {
 		addr = addr + ":27017"
 	}
-	c := connection{addr: addr}
+	c := connection{addr: addr, responses:make(map[uint32]interface{})}
 	return &c, c.reconnect()
 }
 
@@ -87,11 +87,13 @@ func (c *connection) reconnect() os.Error {
 	return nil
 }
 
+// nextId returns the next request id for this connection.
 func (c *connection) nextId() uint32 {
 	c.requestId += 1
 	return c.requestId
 }
 
+// Close closes the connection to the server.
 func (c *connection) Close() os.Error {
 	var err os.Error
 	if c.conn != nil {
@@ -101,12 +103,14 @@ func (c *connection) Close() os.Error {
 	return err
 }
 
-func (c *connection) send(p []byte) os.Error {
-	wire.PutUint32(p[0:4], uint32(len(p)))
-	_, err := c.conn.Write(p)
+// send sets the messages length and writes the message to the socket.
+func (c *connection) send(msg []byte) os.Error {
+	wire.PutUint32(msg[0:4], uint32(len(msg)))
+	_, err := c.conn.Write(msg)
 	return err
 }
 
+// receive recieves a single response from the server.
 func (c *connection) receive() (*response, os.Error) {
 	var r response
 
@@ -115,14 +119,14 @@ func (c *connection) receive() (*response, os.Error) {
 		return nil, err
 	}
 
-	messageLength := int32(wire.Uint32(buf[0:4])) // messageLength
+	messageLength := int32(wire.Uint32(buf[0:4]))   // messageLength
 	// buf[4:8]                                     // requestId
-	r.requestId = wire.Uint32(buf[8:12])     // responseTo 
-	opCode := int32(wire.Uint32(buf[12:16])) // opCode
-	r.flags = int(wire.Uint32(buf[16:20]))   // responseFlags
-	r.cursorId = wire.Uint64(buf[20:28])     // cursorId
+	r.requestId = wire.Uint32(buf[8:12])            // responseTo 
+	opCode := int32(wire.Uint32(buf[12:16]))        // opCode
+	r.flags = int(wire.Uint32(buf[16:20]))          // responseFlags
+	r.cursorId = wire.Uint64(buf[20:28])            // cursorId
 	// buf[28:32]                                   // startingFrom
-	r.count = int(wire.Uint32(buf[32:36])) // numberReturned
+	r.count = int(wire.Uint32(buf[32:36]))          // numberReturned
 	r.data = make([]byte, messageLength-36)
 	if _, err := io.ReadFull(c.conn, r.data); err != nil {
 		return nil, err
@@ -133,6 +137,8 @@ func (c *connection) receive() (*response, os.Error) {
 	return &r, nil
 }
 
+// wait waits for a response to the given request. Reponses to other requests
+// are saved.
 func (c *connection) wait(requestId uint32) (*response, os.Error) {
 	r := c.responses[requestId]
 	c.responses[requestId] = nil, false
@@ -180,8 +186,7 @@ func (c *connection) getMore(namespace string, numberToReturn int, cursorId uint
 	return requestId, nil
 }
 
-func (c *connection) query(namespace string, flags, numberToSkip, numberToReturn int, query,
-returnFieldSelector interface{}) (uint32, os.Error) {
+func (c *connection) query(namespace string, flags, numberToSkip, numberToReturn int, query, returnFieldSelector interface{}) (uint32, os.Error) {
 	requestId := c.nextId()
 	b := buffer(make([]byte, 0, 512))
 	b.Next(4)                    // placeholder for message length
@@ -244,7 +249,7 @@ func (c *connection) Update(namespace string, document, selector interface{}, fl
 	return c.send(b)
 }
 
-func (c *connection) Insert(namespace string, documents []interface{}) (err os.Error) {
+func (c *connection) Insert(namespace string, documents ...interface{}) (err os.Error) {
 	b := buffer(make([]byte, 0, 512))
 	b.Next(4)                 // placeholder for message length
 	b.WriteUint32(c.nextId()) // requestId
@@ -253,7 +258,7 @@ func (c *connection) Insert(namespace string, documents []interface{}) (err os.E
 	b.WriteUint32(0)          // reserved
 	b.WriteString(namespace)  // namespace
 	b.WriteByte(0)            // null terminator
-	for document := range documents {
+	for _, document := range documents {
 		b, err = Encode(b, document)
 		if err != nil {
 			return err
@@ -300,3 +305,4 @@ func (c *connection) FindOne(namespace string, query, returnFieldSelector interf
 	}
 	return Decode(r.data, result)
 }
+
