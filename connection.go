@@ -15,6 +15,7 @@
 package mongo
 
 import (
+	"fmt"
 	"net"
 	"os"
 	"strings"
@@ -210,18 +211,26 @@ func (c *connection) getMore(namespace string, numberToReturn int, cursorId uint
 	return requestId, nil
 }
 
-func (c *connection) query(namespace string, query, returnFieldSelector interface{}, skip, count, options int) (uint32, os.Error) {
+const (
+	queryTailable        = 1 << 1
+	querySlaveOk         = 1 << 2
+	queryNoCursorTimeout = 1 << 4
+	queryAwaitData       = 1 << 5
+	queryExhaust         = 1 << 6
+)
+
+func (c *connection) query(namespace string, query, returnFieldSelector interface{}, skip, count, flags int) (uint32, os.Error) {
 	requestId := c.nextId()
 	b := buffer(make([]byte, 0, 512))
-	b.Next(4)                      // placeholder for message length
-	b.WriteUint32(requestId)       // requestId
-	b.WriteUint32(0)               // responseTo
-	b.WriteUint32(2004)            // opCode
-	b.WriteUint32(uint32(options)) // flags
-	b.WriteString(namespace)       // namespace
-	b.WriteByte(0)                 // null terminator
-	b.WriteUint32(uint32(skip))    // numberToSkip
-	b.WriteUint32(uint32(count))   // numberToReturn
+	b.Next(4)                    // placeholder for message length
+	b.WriteUint32(requestId)     // requestId
+	b.WriteUint32(0)             // responseTo
+	b.WriteUint32(2004)          // opCode
+	b.WriteUint32(uint32(flags)) // flags
+	b.WriteString(namespace)     // namespace
+	b.WriteByte(0)               // null terminator
+	b.WriteUint32(uint32(skip))  // numberToSkip
+	b.WriteUint32(uint32(count)) // numberToReturn
 	b, err := Encode(b, query)
 	if err != nil {
 		return 0, err
@@ -308,8 +317,12 @@ func (c *connection) Remove(namespace string, selector interface{}, options int)
 	return c.send(b)
 }
 
-func (c *connection) FindOne(namespace string, query, returnFieldSelector interface{}, result interface{}) os.Error {
-	requestId, err := c.query(namespace, query, returnFieldSelector, 0, 1, 0)
+func (c *connection) FindOne(namespace string, query interface{}, options *FindOptions, result interface{}) os.Error {
+	var fields interface{}
+	if options != nil {
+		fields = options.Fields
+	}
+	requestId, err := c.query(namespace, query, fields, 0, 1, 0)
 	if err != nil {
 		return err
 	}
@@ -326,8 +339,29 @@ func (c *connection) FindOne(namespace string, query, returnFieldSelector interf
 	return Decode(r.data, result)
 }
 
-func (c *connection) Find(namespace string, query, returnFieldSelector interface{}, skip, count, options int) (Cursor, os.Error) {
-	requestId, err := c.query(namespace, query, returnFieldSelector, skip, count, options)
+func (c *connection) Find(namespace string, query interface{}, options *FindOptions) (Cursor, os.Error) {
+	var fields interface{}
+	var skip, count, flags int
+	if options != nil {
+		skip = options.Skip
+		fields = options.Fields
+		if options.Tailable {
+			flags |= queryTailable
+		}
+		if options.SlaveOk {
+			flags |= querySlaveOk
+		}
+		if options.NoCursorTimeout {
+			flags |= queryNoCursorTimeout
+		}
+		if options.AwaitData {
+			flags |= queryAwaitData
+		}
+		if options.Exhaust {
+			flags |= queryExhaust
+		}
+	}
+	requestId, err := c.query(namespace, query, fields, skip, count, flags)
 	if err != nil {
 		return nil, err
 	}
