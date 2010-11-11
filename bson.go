@@ -15,13 +15,14 @@
 package mongo
 
 import (
-	"encoding/binary"
 	"reflect"
 	"strings"
 	"strconv"
+	"sync"
+	"crypto/rand"
+	"time"
+	"encoding/binary"
 )
-
-var wire = binary.LittleEndian
 
 type DateTime int64
 
@@ -39,16 +40,49 @@ type Regexp struct {
 
 type ObjectId [12]byte
 
+func NewObjectId() ObjectId {
+	t := time.Seconds()
+	c := nextOidCounter()
+	return ObjectId{
+		byte(t >> 24),
+		byte(t >> 16),
+		byte(t >> 8),
+		byte(t),
+		byte(c >> 56),
+		byte(c >> 48),
+		byte(c >> 40),
+		byte(c >> 32),
+		byte(c >> 24),
+		byte(c >> 16),
+		byte(c >> 8),
+		byte(c)}
+}
+
+var (
+	oidLock    sync.Mutex
+	oidCounter uint64
+)
+
+func nextOidCounter() uint64 {
+	oidLock.Lock()
+	defer oidLock.Unlock()
+	if oidCounter == 0 {
+		if err := binary.Read(rand.Reader, binary.BigEndian, &oidCounter); err != nil {
+			panic(err)
+		}
+	}
+	oidCounter += 1
+	return oidCounter
+}
+
 type Symbol string
 
 type Code string
 
-type KeyValue struct {
+type Doc []struct {
 	Key   string
 	Value interface{}
 }
-
-type OrderedMap []KeyValue
 
 type Key int
 

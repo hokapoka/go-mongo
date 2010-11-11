@@ -14,6 +14,12 @@
 
 package mongo
 
+import (
+	"encoding/binary"
+)
+
+var wire = binary.LittleEndian
+
 type buffer []byte
 
 func (b *buffer) Next(n int) []byte {

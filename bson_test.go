@@ -203,7 +203,7 @@ func TestDecodeStruct(t *testing.T) {
 }
 
 func TestEncodeOrderedMap(t *testing.T) {
-	m := OrderedMap{{"test", "hello world"}}
+	m := Doc{{"test", "hello world"}}
 	expected := []byte("\x1b\x00\x00\x00\x02test\x00\f\x00\x00\x00hello world\x00\x00")
 	var actual []byte
 	actual, err := Encode(actual, m)

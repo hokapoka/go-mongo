@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	typeOrderedMap = reflect.Typeof(OrderedMap{})
+	typeDoc = reflect.Typeof(Doc{})
 )
 
 type EncodeTypeError struct {
@@ -65,8 +65,8 @@ func Encode(buf []byte, doc interface{}) (result []byte, err os.Error) {
 	case *reflect.MapValue:
 		e.writeMap(v)
 	default:
-		if v.Type() == typeOrderedMap {
-			e.writeOrderedMap(v.Interface().(OrderedMap))
+		if v.Type() == typeDoc {
+			e.writeDoc(v.Interface().(Doc))
 		} else {
 			return nil, &EncodeTypeError{v.Type()}
 		}
@@ -122,7 +122,7 @@ func (e *encodeState) writeMap(v *reflect.MapValue) {
 	e.endDoc(offset)
 }
 
-func (e *encodeState) writeOrderedMap(v OrderedMap) {
+func (e *encodeState) writeDoc(v Doc) {
 	offset := e.beginDoc()
 	for _, kv := range v {
 		e.encodeValue(kv.Key, reflect.NewValue(kv.Value))
@@ -233,11 +233,11 @@ func encodeMap(e *encodeState, name string, value reflect.Value) {
 	}
 }
 
-func encodeOrderedMap(e *encodeState, name string, value reflect.Value) {
-	v := value.Interface().(OrderedMap)
+func encodeDoc(e *encodeState, name string, value reflect.Value) {
+	v := value.Interface().(Doc)
 	if v != nil {
 		e.writeKindName(kindDocument, name)
-		e.writeOrderedMap(v)
+		e.writeDoc(v)
 	}
 }
 
@@ -291,13 +291,13 @@ func init() {
 		reflect.Struct:    encodeStruct,
 	}
 	typeEncoder = map[reflect.Type]encoderFunc{
+		typeDoc:                         encodeDoc,
 		reflect.Typeof([]byte{}):        encodeByteSlice,
 		reflect.Typeof(Code("")):        func(e *encodeState, name string, value reflect.Value) { encodeString(e, kindCode, name, value) },
 		reflect.Typeof(CodeWithScope{}): encodeCodeWithScope,
 		reflect.Typeof(DateTime(0)):     func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindDateTime, name, value) },
 		reflect.Typeof(MaxKey):          encodeKey,
 		reflect.Typeof(ObjectId{}):      encodeObjectId,
-		typeOrderedMap:                  encodeOrderedMap,
 		reflect.Typeof(Regexp{}):        encodeRegexp,
 		reflect.Typeof(Symbol("")):      func(e *encodeState, name string, value reflect.Value) { encodeString(e, kindSymbol, name, value) },
 		reflect.Typeof(Timestamp(0)):    func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindTimestamp, name, value) },

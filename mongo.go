@@ -62,8 +62,14 @@ const (
 
 type Conn interface {
 	Close() os.Error
-	Update(namespace string, selector, update interface{}, flags int) os.Error
+	Update(namespace string, selector, update interface{}, options int) os.Error
 	Insert(namespace string, documents ...interface{}) os.Error
-	Remove(namespace string, selector interface{}, flags int) os.Error
-	FindOne(namespace string, query, returnFieldSelector interface{}, flags int, result interface{}) os.Error
+	Remove(namespace string, selector interface{}, options int) os.Error
+	FindOne(namespace string, query, returnFieldSelector interface{}, result interface{}) os.Error
+	Find(namespace string, query, returnFieldSelector interface{}, skip, count, options int) (Cursor, os.Error)
+}
+
+type Cursor interface {
+	Close() os.Error
+	Next(value interface{}) os.Error
 }
