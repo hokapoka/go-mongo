@@ -397,21 +397,23 @@ func (c *cursor) Close() os.Error {
 	return nil
 }
 
-func (c *cursor) Next(value interface{}) os.Error {
+func (c *cursor) fill() {
 	if c.err != nil {
-		return c.err
+		return
 	}
 	if c.requestId == 0 && c.cursorId != 0 {
 		var err os.Error
 		c.requestId, err = c.conn.getMore(c.namespace, 0, c.cursorId)
 		if err != nil {
-			return c.fatal(err)
+			c.fatal(err)
+			return
 		}
 	}
 	if c.requestId != 0 && c.count == 0 {
 		r, err := c.conn.wait(c.requestId)
 		if err != nil {
-			return c.fatal(err)
+			c.fatal(err)
+			return
 		}
 		c.count = r.count
 		c.cursorId = r.cursorId
@@ -420,9 +422,22 @@ func (c *cursor) Next(value interface{}) os.Error {
 		if c.cursorId != 0 {
 			c.requestId, err = c.conn.getMore(c.namespace, 0, c.cursorId)
 			if err != nil {
-				return c.fatal(err)
+				c.fatal(err)
+				return
 			}
 		}
+	}
+}
+
+func (c *cursor) HasNext() bool {
+	c.fill()
+	return c.count > 0
+}
+
+func (c *cursor) Next(value interface{}) os.Error {
+	c.fill()
+	if c.err != nil {
+		return c.err
 	}
 	if c.count == 0 {
 		return EOF

@@ -86,5 +86,6 @@ type Conn interface {
 
 type Cursor interface {
 	Close() os.Error
+	HasNext() bool
 	Next(value interface{}) os.Error
 }

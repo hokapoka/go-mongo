@@ -41,6 +41,14 @@ type Regexp struct {
 type ObjectId [12]byte
 
 func NewObjectId() ObjectId {
+	// The following format is used for object ids:
+	//
+	// [0:4] Time since epoch in seconds. This is compatible 
+	//       with other drivers.
+	// 
+	// [4:12] Incrementing counter intialized with crypto random
+	//        number. This ensures that object ids are unique, but
+	//        is simpler than the format used by other drivers.
 	t := time.Seconds()
 	c := nextOidCounter()
 	return ObjectId{
