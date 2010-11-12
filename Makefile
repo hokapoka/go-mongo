@@ -22,11 +22,7 @@ GOFILES=\
     bson_encode.go\
     mongo.go\
     connection.go\
+    pool.go\
 
-Junkk=\
-    mongo.go\
-    connection.go\
-    database.go\
-    collection.go\
  
 include $(GOROOT)/src/Make.pkg

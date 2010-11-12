@@ -159,7 +159,7 @@ func (c *connection) receive() (*response, os.Error) {
 }
 
 // wait waits for a response to the given request. Reponses to other requests
-// are saved.
+// are saved. 
 func (c *connection) wait(requestId uint32) (*response, os.Error) {
 	if c.err != nil {
 		return nil, c.err
