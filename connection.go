@@ -262,7 +262,7 @@ func (c *connection) killCursors(cursorIds ...uint64) os.Error {
 	return c.send(b)
 }
 
-func (c *connection) Update(namespace string, document, selector interface{}, options int) (err os.Error) {
+func (c *connection) Update(namespace string, document, selector interface{}, options UpdateOption) (err os.Error) {
 	b := buffer(make([]byte, 0, 512))
 	b.Next(4)                      // placeholder for message length
 	b.WriteUint32(c.nextId())      // requestId
@@ -300,7 +300,7 @@ func (c *connection) Insert(namespace string, documents ...interface{}) (err os.
 	return c.send(b)
 }
 
-func (c *connection) Remove(namespace string, selector interface{}, options int) (err os.Error) {
+func (c *connection) Remove(namespace string, selector interface{}, options RemoveOption) (err os.Error) {
 	b := buffer(make([]byte, 0, 512))
 	b.Next(4)                      // placeholder for message length
 	b.WriteUint32(c.nextId())      // requestId

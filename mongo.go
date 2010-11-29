@@ -12,28 +12,39 @@
 // License for the specific language governing permissions and limitations
 // under the License.
 
+// The mongo package is a driver for MongoDB. 
+//
+// This driver uses a namespace string to specify the database and collection
+// for all operations. The namespace string is in the format
+// "<database>.<collection>" where <database> is the name of the database and
+// <collection> is the name of the collection. Most other MongoDB drivers use
+// database and collection options to specify the database and collection.
 package mongo
 
 import (
 	"os"
 )
 
+
 var (
 	EOF = os.NewError("mongo: eof")
 )
 
+type UpdateOption int
+type RemoveOption int
+
 const (
 	//If set, the database will insert the supplied object into the collection
 	//if no matching document is found.
-	UpdateUpsert = 1 << 0
+	UpdateUpsert UpdateOption = 1 << 0
 
 	// If set, the database will insert the supplied object into the collection
 	// if no matching document is found.
-	UpdateMulti = 1 << 1
+	UpdateMulti UpdateOption = 1 << 1
 
 	//If set, the database will remove only the first matching document in the
 	//collection. Otherwise all matching documents will be removed.
-	RemoveSingle = 1 << 0
+	RemoveSingle RemoveOption = 1 << 0
 )
 
 type FindOptions struct {
@@ -75,17 +86,34 @@ type FindOptions struct {
 	Limit int
 }
 
+// A Conn represents a connection to a MongoDB server. 
 type Conn interface {
+	// Close releases the resources used by this connection.
 	Close() os.Error
-	Update(namespace string, selector, update interface{}, options int) os.Error
+
+	// Update document specified by selector with update.
+	Update(namespace string, selector, update interface{}, options UpdateOption) os.Error
+
+	// Insert documents.
 	Insert(namespace string, documents ...interface{}) os.Error
-	Remove(namespace string, selector interface{}, options int) os.Error
+
+	// Remove documents specified by seletor.
+	Remove(namespace string, selector interface{}, options RemoveOption) os.Error
+
+	// Find at most one document specified by query. Returns EOF if no documents match query.
 	FindOne(namespace string, query interface{}, options *FindOptions, result interface{}) os.Error
+
+	// Find documents specified by selector. The returned cursor must be closed.
 	Find(namespace string, query interface{}, options *FindOptions) (Cursor, os.Error)
 }
 
 type Cursor interface {
+	// Close releases the resources used by this connection. 
 	Close() os.Error
+
+	// HasNext returns true if there are more documents in the cursor.
 	HasNext() bool
+
+	// Next fetches the next document from the cursor.
 	Next(value interface{}) os.Error
 }

@@ -65,9 +65,9 @@ func (p *Pool) Get() (Conn, os.Error) {
 }
 
 func (c *pooledConnection) Close() os.Error {
-    if c.connection == nil {
-        return nil
-    }
+	if c.connection == nil {
+		return nil
+	}
 	if c.connection.err == nil {
 		c.pool.put(c.connection)
 	}
