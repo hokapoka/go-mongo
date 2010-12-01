@@ -26,6 +26,7 @@ var (
 	typeDoc = reflect.Typeof(Doc{})
 )
 
+// EncodeTypeError is the error indicating that Encode could not encode an input type.
 type EncodeTypeError struct {
 	Type reflect.Type
 }
@@ -43,6 +44,7 @@ type encodeState struct {
 	buffer
 }
 
+// Encode appends the BSON encoding of doc to buf and returns the new slice.
 func Encode(buf []byte, doc interface{}) (result []byte, err os.Error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -183,7 +185,7 @@ func encodeRegexp(e *encodeState, name string, value reflect.Value) {
 	r := value.Interface().(Regexp)
 	e.WriteString(r.Pattern)
 	e.WriteByte(0)
-	e.WriteString(r.Flags)
+	e.WriteString(r.Options)
 	e.WriteByte(0)
 }
 
@@ -209,14 +211,14 @@ func encodeCodeWithScope(e *encodeState, name string, value reflect.Value) {
 	e.endDoc(offset)
 }
 
-func encodeKey(e *encodeState, name string, value reflect.Value) {
-	switch value.Interface().(Key) {
+func encodeMinMax(e *encodeState, name string, value reflect.Value) {
+	switch value.Interface().(MinMax) {
 	case 1:
-		e.writeKindName(kindMaxKey, name)
+		e.writeKindName(kindMaxValue, name)
 	case -1:
-		e.writeKindName(kindMinKey, name)
+		e.writeKindName(kindMinValue, name)
 	default:
-		e.abort(os.NewError("bson: unknown key"))
+		e.abort(os.NewError("bson: unknown MinMax value"))
 	}
 }
 
@@ -296,7 +298,7 @@ func init() {
 		reflect.Typeof(Code("")):        func(e *encodeState, name string, value reflect.Value) { encodeString(e, kindCode, name, value) },
 		reflect.Typeof(CodeWithScope{}): encodeCodeWithScope,
 		reflect.Typeof(DateTime(0)):     func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindDateTime, name, value) },
-		reflect.Typeof(MaxKey):          encodeKey,
+		reflect.Typeof(MinMax(0)):       encodeMinMax,
 		reflect.Typeof(ObjectId{}):      encodeObjectId,
 		reflect.Typeof(Regexp{}):        encodeRegexp,
 		reflect.Typeof(Symbol("")):      func(e *encodeState, name string, value reflect.Value) { encodeString(e, kindSymbol, name, value) },

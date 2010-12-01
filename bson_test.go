@@ -74,8 +74,8 @@ type stTimestamp struct {
 	Test Timestamp
 }
 
-type stKey struct {
-	Test Key
+type stMinMax struct {
+	Test MinMax
 }
 
 type stCodeWithScope struct {
@@ -125,9 +125,9 @@ var bsonTests = []struct {
 		[]byte("\x0F\x00\x00\x00\x10test\x00\x0A\x00\x00\x00\x00")},
 	{new(stInt64), stInt64{256}, testMap(int64(256)),
 		[]byte("\x13\x00\x00\x00\x12test\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00")},
-	{new(stKey), stKey{MaxKey}, testMap(MaxKey),
+	{new(stMinMax), stMinMax{MaxValue}, testMap(MaxValue),
 		[]byte("\x0B\x00\x00\x00\x7Ftest\x00\x00")},
-	{new(stKey), stKey{MinKey}, testMap(MinKey),
+	{new(stMinMax), stMinMax{MinValue}, testMap(MinValue),
 		[]byte("\x0B\x00\x00\x00\xFFtest\x00\x00")},
 	{nil, stRegexp{Regexp{"a*b", "i"}}, testMap(Regexp{"a*b", "i"}),
 		[]byte("\x11\x00\x00\x00\vtest\x00a*b\x00i\x00\x00")},

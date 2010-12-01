@@ -22,10 +22,10 @@ import (
 	"runtime"
 )
 
-var (
-	ErrEOD = os.NewError("bson: unexpected end of data")
-)
+var ErrEOD = os.NewError("bson: unexpected end of data when parsing BSON")
 
+// DecodeConvertError is returned when decoder cannot convert an input type to
+// an output type.
 type DecodeConvertError struct {
 	kind int
 	t    reflect.Type
@@ -35,6 +35,8 @@ func (e *DecodeConvertError) String() string {
 	return "bson: could not decode " + kindName(e.kind) + " to " + e.t.String()
 }
 
+// DecodeTypeError is returned when the deocoder encounters an unknown type in
+// the input.
 type DecodeTypeError struct {
 	kind int
 }
@@ -43,6 +45,7 @@ func (e *DecodeTypeError) String() string {
 	return "bson: could not decode " + kindName(e.kind)
 }
 
+// Deocde decodes BSON data to value.
 func Decode(data []byte, v interface{}) (err os.Error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -334,15 +337,15 @@ func decodeBool(d *decodeState, kind int, value reflect.Value) {
 	value.(*reflect.BoolValue).Set(b)
 }
 
-func decodeKey(d *decodeState, kind int, value reflect.Value) {
+func decodeMinMax(d *decodeState, kind int, value reflect.Value) {
 	var n int64
 	switch kind {
 	default:
 		d.saveError(&DecodeConvertError{kind, value.Type()})
 		return
-	case kindMaxKey:
+	case kindMaxValue:
 		n = 1
-	case kindMinKey:
+	case kindMinValue:
 		n = -1
 	}
 	value.(*reflect.IntValue).Set(n)
@@ -527,10 +530,10 @@ func (d *decodeState) decodeValueInterface(kind int) interface{} {
 		return Timestamp(d.scanInt64())
 	case kindInt64:
 		return d.scanInt64()
-	case kindMinKey:
-		return MinKey
-	case kindMaxKey:
-		return MaxKey
+	case kindMinValue:
+		return MinValue
+	case kindMaxValue:
+		return MaxValue
 	default:
 		d.abort(&DecodeTypeError{kind})
 	}
@@ -556,7 +559,7 @@ func (d *decodeState) skipValue(kind int) {
 		d.offset += 8
 	case kindInt32:
 		d.offset += 4
-	case kindMinKey, kindMaxKey, kindNull:
+	case kindMinValue, kindMaxValue, kindNull:
 		d.offset += 0
 	default:
 		d.abort(&DecodeTypeError{kind})
@@ -587,7 +590,7 @@ func init() {
 	typeDecoder = map[reflect.Type]decoderFunc{
 		reflect.Typeof([]byte{}):                     decodeByteSlice,
 		reflect.Typeof(DateTime(0)):                  decodeDateTime,
-		reflect.Typeof(MaxKey):                       decodeKey,
+		reflect.Typeof(MinMax(0)):                    decodeMinMax,
 		reflect.Typeof(make(map[string]interface{})): decodeMapStringInterface,
 		reflect.Typeof(ObjectId{}):                   decodeObjectId,
 		reflect.Typeof(Symbol("")):                   decodeString,
