@@ -86,6 +86,10 @@ func (c *connection) Close() os.Error {
 	return err
 }
 
+func (c *connection) Error() os.Error {
+	return c.err
+}
+
 // send sets the messages length and writes the message to the socket.
 func (c *connection) send(msg []byte) os.Error {
 	if c.err != nil {

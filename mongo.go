@@ -91,6 +91,9 @@ type Conn interface {
 	// Close releases the resources used by this connection.
 	Close() os.Error
 
+	// Error returns an non-nil if the connection is dead.
+	Error() os.Error
+
 	// Update document specified by selector with update.
 	Update(namespace string, selector, update interface{}, options UpdateOption) os.Error
 
