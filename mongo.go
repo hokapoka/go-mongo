@@ -34,16 +34,15 @@ type UpdateOption int
 type RemoveOption int
 
 const (
-	//If set, the database will insert the supplied object into the collection
-	//if no matching document is found.
-	UpdateUpsert UpdateOption = 1 << 0
-
 	// If set, the database will insert the supplied object into the collection
 	// if no matching document is found.
+	UpdateUpsert UpdateOption = 1 << 0
+
+	// If set, the database will update all objects matching the query.
 	UpdateMulti UpdateOption = 1 << 1
 
-	//If set, the database will remove only the first matching document in the
-	//collection. Otherwise all matching documents will be removed.
+	// If set, the database will remove only the first matching document in the
+	// collection. Otherwise all matching documents will be removed.
 	RemoveSingle RemoveOption = 1 << 0
 )
 

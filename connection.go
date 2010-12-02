@@ -20,7 +20,6 @@ import (
 	"os"
 	"strings"
 	"io"
-	"log"
 )
 
 type response struct {
@@ -66,7 +65,6 @@ func (c *connection) nextId() uint32 {
 }
 
 func (c *connection) fatal(err os.Error) os.Error {
-	log.Println("connection faital", err)
 	if c.err == nil {
 		c.Close()
 		c.err = err
@@ -115,24 +113,15 @@ func (c *connection) receive() (*response, os.Error) {
 	}
 
 	var r response
-	messageLength := int32(wire.Uint32(buf[0:4]))  // messageLength
-	requestId := wire.Uint32(buf[4:8])             // requestId
-	r.requestId = wire.Uint32(buf[8:12])           // responseTo 
-	opCode := int32(wire.Uint32(buf[12:16]))       // opCode
-	flags := int(wire.Uint32(buf[16:20]))          // responseFlags
-	r.cursorId = wire.Uint64(buf[20:28])           // cursorId
-	startingFrom := int32(wire.Uint32(buf[28:32])) // startingFrom
-	r.count = int(wire.Uint32(buf[32:36]))         // numberReturned
+	messageLength := int32(wire.Uint32(buf[0:4])) // messageLength
+	// requestId := wire.Uint32(buf[4:8])             // requestId
+	r.requestId = wire.Uint32(buf[8:12])     // responseTo 
+	opCode := int32(wire.Uint32(buf[12:16])) // opCode
+	flags := int(wire.Uint32(buf[16:20]))    // responseFlags
+	r.cursorId = wire.Uint64(buf[20:28])     // cursorId
+	// startingFrom := int32(wire.Uint32(buf[28:32])) // startingFrom
+	r.count = int(wire.Uint32(buf[32:36])) // numberReturned
 	r.data = make([]byte, messageLength-36)
-
-	log.Println("RESPONSE",
-		"len:", messageLength,
-		"reqId:", requestId,
-		"respId:", r.requestId,
-		"flags:", flags,
-		"cursor:", r.cursorId,
-		"start:", startingFrom,
-		"count:", r.count)
 
 	if _, err := io.ReadFull(c.conn, r.data); err != nil {
 		return nil, c.fatal(err)
@@ -270,6 +259,7 @@ func (c *connection) Update(namespace string, document, selector interface{}, op
 	b := buffer(make([]byte, 0, 512))
 	b.Next(4)                      // placeholder for message length
 	b.WriteUint32(c.nextId())      // requestId
+	b.WriteUint32(0)               // responseTo
 	b.WriteUint32(2001)            // opCode
 	b.WriteUint32(0)               // reserved
 	b.WriteString(namespace)       // namespace
