@@ -300,7 +300,7 @@ func decodeObjectId(d *decodeState, kind int, value reflect.Value) {
 	case kindObjectId:
 		p = d.scanSlice(12)
 	}
-	reflect.ArrayCopy(value.(reflect.ArrayOrSliceValue), reflect.NewValue(p).(reflect.ArrayOrSliceValue))
+	reflect.Copy(value.(reflect.ArrayOrSliceValue), reflect.NewValue(p).(reflect.ArrayOrSliceValue))
 }
 
 func decodeByteSlice(d *decodeState, kind int, value reflect.Value) {
@@ -318,7 +318,7 @@ func decodeByteSlice(d *decodeState, kind int, value reflect.Value) {
 	} else {
 		v.SetLen(len(p))
 	}
-	reflect.ArrayCopy(v, reflect.NewValue(p).(reflect.ArrayOrSliceValue))
+	reflect.Copy(v, reflect.NewValue(p).(reflect.ArrayOrSliceValue))
 }
 
 func decodeBool(d *decodeState, kind int, value reflect.Value) {
@@ -415,7 +415,7 @@ func decodeSlice(d *decodeState, kind int, value reflect.Value) {
 				newcap = 4
 			}
 			newv := reflect.MakeSlice(t, v.Len(), newcap)
-			reflect.ArrayCopy(newv, v)
+			reflect.Copy(newv, v)
 			v.Set(newv)
 		}
 		if i >= v.Len() {
