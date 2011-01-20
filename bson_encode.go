@@ -281,7 +281,6 @@ func init() {
 		reflect.Bool:      encodeBool,
 		reflect.Float32:   encodeFloat,
 		reflect.Float64:   encodeFloat,
-		reflect.Float:     encodeFloat,
 		reflect.Int32:     encodeInt,
 		reflect.Int64:     func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindInt64, name, value) },
 		reflect.Int:       func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindInt64, name, value) },

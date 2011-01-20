@@ -576,7 +576,6 @@ func init() {
 		reflect.Bool:      decodeBool,
 		reflect.Float32:   decodeFloat,
 		reflect.Float64:   decodeFloat,
-		reflect.Float:     decodeFloat,
 		reflect.Int32:     decodeInt,
 		reflect.Int64:     decodeInt,
 		reflect.Int:       decodeInt,
