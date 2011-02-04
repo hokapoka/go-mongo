@@ -27,7 +27,7 @@ func testMap(value interface{}) map[string]interface{} {
 type stEmpty struct{}
 
 type stFloat64 struct {
-	Test float
+	Test float64
 }
 
 type stString struct {
