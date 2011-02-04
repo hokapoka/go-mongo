@@ -16,25 +16,28 @@ package mongo
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"strings"
-	"io"
 )
 
-type response struct {
-	requestId uint32
-	cursorId  uint64
-	count     int
-	data      []byte
-	err       os.Error
-}
+const (
+	updateUpsert         = 1 << 0
+	updateMulti          = 1 << 1
+	removeSingle         = 1 << 0
+	queryTailable        = 1 << 1
+	querySlaveOk         = 1 << 2
+	queryNoCursorTimeout = 1 << 4
+	queryAwaitData       = 1 << 5
+	queryExhaust         = 1 << 6
+)
 
 type connection struct {
 	conn      *net.TCPConn
 	addr      string
 	requestId uint32
-	responses map[uint32]interface{}
+	cursors   map[uint32]*cursor
 	err       os.Error
 }
 
@@ -43,7 +46,10 @@ func Dial(addr string) (Conn, os.Error) {
 	if strings.LastIndex(addr, ":") <= strings.LastIndex(addr, "]") {
 		addr = addr + ":27017"
 	}
-	c := connection{addr: addr, responses: make(map[uint32]interface{})}
+	c := connection{
+		addr:    addr,
+		cursors: make(map[uint32]*cursor),
+	}
 	return &c, c.reconnect()
 }
 
@@ -78,7 +84,7 @@ func (c *connection) Close() os.Error {
 	if c.conn != nil {
 		err = c.conn.Close()
 		c.conn = nil
-		c.responses = nil
+		c.cursors = nil
 		c.err = os.NewError("mongo: connection closed")
 	}
 	return err
@@ -101,170 +107,27 @@ func (c *connection) send(msg []byte) os.Error {
 	return nil
 }
 
-// receive recieves a single response from the server.
-func (c *connection) receive() (*response, os.Error) {
-	if c.err != nil {
-		return nil, c.err
-	}
+func (c *connection) Update(namespace string, document, selector interface{}, options *UpdateOptions) (err os.Error) {
 
-	var buf [36]byte
-	if _, err := io.ReadFull(c.conn, buf[:]); err != nil {
-		return nil, c.fatal(err)
-	}
-
-	var r response
-	messageLength := int32(wire.Uint32(buf[0:4])) // messageLength
-	// requestId := wire.Uint32(buf[4:8])             // requestId
-	r.requestId = wire.Uint32(buf[8:12])     // responseTo 
-	opCode := int32(wire.Uint32(buf[12:16])) // opCode
-	flags := int(wire.Uint32(buf[16:20]))    // responseFlags
-	r.cursorId = wire.Uint64(buf[20:28])     // cursorId
-	// startingFrom := int32(wire.Uint32(buf[28:32])) // startingFrom
-	r.count = int(wire.Uint32(buf[32:36])) // numberReturned
-	r.data = make([]byte, messageLength-36)
-
-	if _, err := io.ReadFull(c.conn, r.data); err != nil {
-		return nil, c.fatal(err)
-	}
-	if opCode != 1 {
-		return nil, c.fatal(os.NewError(fmt.Sprintf("mongo: unknown response opcode %d", opCode)))
-	}
-
-	const (
-		cursorNotFound = 1 << 0
-		queryFailure   = 1 << 1
-	)
-
-	if flags&cursorNotFound != 0 {
-		r.err = os.NewError("mongo: cursor not found")
-	} else if flags&queryFailure != 0 {
-		var m map[string]interface{}
-		err := Decode(r.data, &m)
-		if err != nil {
-			r.err = os.NewError("mongo: query failure")
-		} else if s, ok := m["$err"].(string); ok {
-			r.err = os.NewError(s)
-		} else {
-			r.err = os.NewError("mongo: query failure")
+	flags := 0
+	if options != nil {
+		if options.Upsert {
+			flags |= updateUpsert
+		}
+		if options.Multi {
+			flags |= updateMulti
 		}
 	}
-	return &r, nil
-}
 
-// wait waits for a response to the given request. Reponses to other requests
-// are saved. 
-func (c *connection) wait(requestId uint32) (*response, os.Error) {
-	if c.err != nil {
-		return nil, c.err
-	}
-
-	r := c.responses[requestId]
-	c.responses[requestId] = nil, false
-
-	switch r := r.(type) {
-	case *response:
-		return r, r.err
-	case nil:
-		return nil, os.NewError("mongo: not expecting response")
-	default:
-		for {
-			r, err := c.receive()
-			if err != nil {
-				return nil, err
-			}
-			if r.requestId == requestId {
-				return r, r.err
-			} else if _, found := c.responses[r.requestId]; found {
-				c.responses[r.requestId] = r
-			} else if r.cursorId != 0 {
-				c.killCursors(r.cursorId)
-			}
-		}
-	}
-	return nil, os.NewError("mongo: unexpected")
-}
-
-func (c *connection) getMore(namespace string, numberToReturn int, cursorId uint64) (uint32, os.Error) {
-	requestId := c.nextId()
-	b := buffer(make([]byte, 0, 5*4+len(namespace)+1+4+8))
-	b.Next(4)                // placeholder for message length
-	b.WriteUint32(requestId) // requestId
-	b.WriteUint32(0)         // responseTo
-	b.WriteUint32(2005)      // opCode
-	b.WriteUint32(0)         // reserved
-	b.WriteString(namespace) // namespace
-	b.WriteByte(0)           // null terminator
-	b.WriteUint32(uint32(numberToReturn))
-	b.WriteUint64(cursorId)
-	err := c.send(b)
-	if err != nil {
-		return 0, err
-	}
-	c.responses[requestId] = true
-	return requestId, nil
-}
-
-const (
-	queryTailable        = 1 << 1
-	querySlaveOk         = 1 << 2
-	queryNoCursorTimeout = 1 << 4
-	queryAwaitData       = 1 << 5
-	queryExhaust         = 1 << 6
-)
-
-func (c *connection) query(namespace string, query, returnFieldSelector interface{}, skip, count, flags int) (uint32, os.Error) {
-	requestId := c.nextId()
 	b := buffer(make([]byte, 0, 512))
 	b.Next(4)                    // placeholder for message length
-	b.WriteUint32(requestId)     // requestId
+	b.WriteUint32(c.nextId())    // requestId
 	b.WriteUint32(0)             // responseTo
-	b.WriteUint32(2004)          // opCode
-	b.WriteUint32(uint32(flags)) // flags
+	b.WriteUint32(2001)          // opCode
+	b.WriteUint32(0)             // reserved
 	b.WriteString(namespace)     // namespace
 	b.WriteByte(0)               // null terminator
-	b.WriteUint32(uint32(skip))  // numberToSkip
-	b.WriteUint32(uint32(count)) // numberToReturn
-	b, err := Encode(b, query)
-	if err != nil {
-		return 0, err
-	}
-	if returnFieldSelector != nil {
-		b, err = Encode(b, returnFieldSelector)
-		if err != nil {
-			return 0, err
-		}
-	}
-	err = c.send(b)
-	if err != nil {
-		return 0, err
-	}
-	c.responses[requestId] = true
-	return requestId, nil
-}
-
-func (c *connection) killCursors(cursorIds ...uint64) os.Error {
-	b := buffer(make([]byte, 5*4*len(cursorIds)*8))
-	b.Next(4)                 // placeholder for message length
-	b.WriteUint32(c.nextId()) // requestId
-	b.WriteUint32(0)          // responseTo
-	b.WriteUint32(2007)       // opCode
-	b.WriteUint32(0)          // reserved
-	for _, cursorId := range cursorIds {
-		b.WriteUint64(cursorId)
-	}
-	return c.send(b)
-}
-
-func (c *connection) Update(namespace string, document, selector interface{}, options UpdateOption) (err os.Error) {
-	b := buffer(make([]byte, 0, 512))
-	b.Next(4)                      // placeholder for message length
-	b.WriteUint32(c.nextId())      // requestId
-	b.WriteUint32(0)               // responseTo
-	b.WriteUint32(2001)            // opCode
-	b.WriteUint32(0)               // reserved
-	b.WriteString(namespace)       // namespace
-	b.WriteByte(0)                 // null terminator
-	b.WriteUint32(uint32(options)) // flags
+	b.WriteUint32(uint32(flags)) // flags
 	b, err = Encode(b, document)
 	if err != nil {
 		return err
@@ -294,16 +157,23 @@ func (c *connection) Insert(namespace string, documents ...interface{}) (err os.
 	return c.send(b)
 }
 
-func (c *connection) Remove(namespace string, selector interface{}, options RemoveOption) (err os.Error) {
+func (c *connection) Remove(namespace string, selector interface{}, options *RemoveOptions) (err os.Error) {
+
+	flags := 0
+	if options != nil {
+		if options.Single {
+			flags |= removeSingle
+		}
+	}
 	b := buffer(make([]byte, 0, 512))
-	b.Next(4)                      // placeholder for message length
-	b.WriteUint32(c.nextId())      // requestId
-	b.WriteUint32(0)               // responseTo
-	b.WriteUint32(2006)            // opCode
-	b.WriteUint32(0)               // reserved
-	b.WriteString(namespace)       // namespace
-	b.WriteByte(0)                 // null terminator
-	b.WriteUint32(uint32(options)) // flags
+	b.Next(4)                    // placeholder for message length
+	b.WriteUint32(c.nextId())    // requestId
+	b.WriteUint32(0)             // responseTo
+	b.WriteUint32(2006)          // opCode
+	b.WriteUint32(0)             // reserved
+	b.WriteString(namespace)     // namespace
+	b.WriteByte(0)               // null terminator
+	b.WriteUint32(uint32(flags)) // flags
 	b, err = Encode(b, selector)
 	if err != nil {
 		return err
@@ -311,34 +181,14 @@ func (c *connection) Remove(namespace string, selector interface{}, options Remo
 	return c.send(b)
 }
 
-func (c *connection) FindOne(namespace string, query interface{}, options *FindOptions, result interface{}) os.Error {
-	var fields interface{}
-	if options != nil {
-		fields = options.Fields
-	}
-	requestId, err := c.query(namespace, query, fields, 0, 1, 0)
-	if err != nil {
-		return err
-	}
-	r, err := c.wait(requestId)
-	if err != nil {
-		return err
-	}
-	if r.cursorId != 0 {
-		c.killCursors(r.cursorId)
-	}
-	if r.count < 1 {
-		return EOF
-	}
-	return Decode(r.data, result)
-}
-
 func (c *connection) Find(namespace string, query interface{}, options *FindOptions) (Cursor, os.Error) {
+
 	var fields interface{}
-	var skip, count, flags int
+	var skip, limit, flags int
 	if options != nil {
 		skip = options.Skip
 		fields = options.Fields
+		limit = options.Limit
 		if options.Tailable {
 			flags |= queryTailable
 		}
@@ -355,11 +205,74 @@ func (c *connection) Find(namespace string, query interface{}, options *FindOpti
 			flags |= queryExhaust
 		}
 	}
-	requestId, err := c.query(namespace, query, fields, skip, count, flags)
+
+	requestId := c.nextId()
+	b := buffer(make([]byte, 0, 512))
+	b.Next(4)                    // placeholder for message length
+	b.WriteUint32(requestId)     // requestId
+	b.WriteUint32(0)             // responseTo
+	b.WriteUint32(2004)          // opCode
+	b.WriteUint32(uint32(flags)) // flags
+	b.WriteString(namespace)     // namespace
+	b.WriteByte(0)               // null terminator
+	b.WriteUint32(uint32(skip))  // numberToSkip
+	b.WriteUint32(uint32(limit)) // numberToReturn
+	b, err := Encode(b, query)
 	if err != nil {
 		return nil, err
 	}
-	return &cursor{conn: c, namespace: namespace, requestId: requestId}, nil
+	if fields != nil {
+		b, err = Encode(b, fields)
+		if err != nil {
+			return nil, err
+		}
+	}
+	err = c.send(b)
+	if err != nil {
+		return nil, err
+	}
+
+	r := &cursor{conn: c, namespace: namespace, requestId: requestId, flags: flags, limit:limit}
+	c.cursors[requestId] = r
+	return r, nil
+}
+
+func (c *connection) getMore(namespace string, numberToReturn int, cursorId uint64) (uint32, os.Error) {
+	requestId := c.nextId()
+	b := buffer(make([]byte, 0, 5*4+len(namespace)+1+4+8))
+	b.Next(4)                // placeholder for message length
+	b.WriteUint32(requestId) // requestId
+	b.WriteUint32(0)         // responseTo
+	b.WriteUint32(2005)      // opCode
+	b.WriteUint32(0)         // reserved
+	b.WriteString(namespace) // namespace
+	b.WriteByte(0)           // null terminator
+	b.WriteUint32(uint32(numberToReturn))
+	b.WriteUint64(cursorId)
+	err := c.send(b)
+	if err != nil {
+		return 0, err
+	}
+	return requestId, nil
+}
+
+func (c *connection) killCursors(cursorIds ...uint64) os.Error {
+	b := buffer(make([]byte, 5*4*len(cursorIds)*8))
+	b.Next(4)                 // placeholder for message length
+	b.WriteUint32(c.nextId()) // requestId
+	b.WriteUint32(0)          // responseTo
+	b.WriteUint32(2007)       // opCode
+	b.WriteUint32(0)          // reserved
+	for _, cursorId := range cursorIds {
+		b.WriteUint64(cursorId)
+	}
+	return c.send(b)
+}
+
+type response struct {
+	flags uint32
+	count int
+	data  []byte
 }
 
 type cursor struct {
@@ -367,84 +280,166 @@ type cursor struct {
 	namespace string
 	requestId uint32
 	cursorId  uint64
-	count     int
-	data      []byte
+    limit     int
+	resp      []response
+	flags     int
 	err       os.Error
 }
 
-func (c *cursor) fatal(err os.Error) os.Error {
-	if c.err == nil {
-		c.Close()
-		c.err = err
+// receive recieves a single response from the server and delivers it to the appropriate cursor.
+func (c *connection) receive() os.Error {
+	if c.err != nil {
+		return c.err
+	}
+
+	var buf [36]byte
+	if _, err := io.ReadFull(c.conn, buf[:]); err != nil {
+		return c.fatal(err)
+	}
+
+	messageLength := int32(wire.Uint32(buf[0:4]))
+	requestId := wire.Uint32(buf[4:8])
+	responseTo := wire.Uint32(buf[8:12])
+	opCode := int32(wire.Uint32(buf[12:16]))
+	flags := wire.Uint32(buf[16:20])
+	cursorId := wire.Uint64(buf[20:28])
+	//startingFrom := int32(wire.Uint32(buf[28:32]))
+	count := int(wire.Uint32(buf[32:36]))
+	data := make([]byte, messageLength-36)
+
+	if _, err := io.ReadFull(c.conn, data); err != nil {
+		return c.fatal(err)
+	}
+
+	if opCode != 1 {
+		return c.fatal(os.NewError(fmt.Sprintf("mongo: unknown response opcode %d", opCode)))
+	}
+
+	r, found := c.cursors[responseTo]
+	if !found {
+		if cursorId != 0 {
+			c.killCursors(cursorId)
+		}
+		return nil
+	}
+
+
+	c.cursors[responseTo] = nil, false
+	r.requestId = 0
+	r.cursorId = cursorId
+	if r.flags&queryExhaust != 0 && cursorId != 0 {
+		r.requestId = requestId
+		c.cursors[requestId] = r
+	}
+    r.limit -= count
+
+	r.resp = append(r.resp, response{flags: flags, count: count, data: data})
+	return nil
+}
+
+func (r *cursor) fatal(err os.Error) os.Error {
+	if r.err == nil {
+		r.Close()
+		r.err = err
 	}
 	return err
 }
 
-func (c *cursor) Close() os.Error {
-	if c.err != nil {
-		c.conn.responses[c.requestId] = nil, false
-		if c.cursorId != 0 {
-			c.conn.killCursors(c.cursorId)
-		}
-		c.err = os.NewError("mongo: cursor closed")
+func (r *cursor) Close() os.Error {
+	if r.err != nil {
+		return nil
 	}
+	if r.requestId != 0 {
+		r.conn.cursors[r.requestId] = nil, false
+	}
+	if r.cursorId != 0 {
+		r.conn.killCursors(r.cursorId)
+	}
+	r.err = os.NewError("mongo: cursor closed")
+	r.conn = nil
+	r.resp = nil
 	return nil
 }
 
-func (c *cursor) fill() {
-	if c.err != nil {
-		return
+func (r *cursor) fill() os.Error {
+	if r.err != nil {
+		return r.err
 	}
-	if c.requestId == 0 && c.cursorId != 0 {
-		var err os.Error
-		c.requestId, err = c.conn.getMore(c.namespace, 0, c.cursorId)
-		if err != nil {
-			c.fatal(err)
-			return
+
+	if len(r.resp) > 0 {
+		if r.resp[0].count > 0 {
+			return nil
 		}
+		r.resp = r.resp[1:]
 	}
-	if c.requestId != 0 && c.count == 0 {
-		r, err := c.conn.wait(c.requestId)
-		if err != nil {
-			c.fatal(err)
-			return
+
+	if len(r.resp) == 0 {
+		if r.requestId == 0 {
+			if r.cursorId == 0 || r.limit <= 0 {
+				return r.fatal(EOF)
+			}
+			if r.flags&queryExhaust == 0 {
+				var err os.Error
+				r.requestId, err = r.conn.getMore(r.namespace, r.limit, r.cursorId)
+				if err != nil {
+					return r.fatal(err)
+				}
+                r.conn.cursors[r.requestId] = r
+			}
 		}
-		c.count = r.count
-		c.cursorId = r.cursorId
-		c.data = r.data
-		c.requestId = 0
-		if c.cursorId != 0 {
-			c.requestId, err = c.conn.getMore(c.namespace, 0, c.cursorId)
+		for len(r.resp) == 0 {
+			err := r.conn.receive()
 			if err != nil {
-				c.fatal(err)
-				return
+				return r.fatal(err)
 			}
 		}
 	}
+
+	const (
+		cursorNotFound = 1 << 0
+		queryFailure   = 1 << 1
+	)
+
+	if r.resp[0].flags&cursorNotFound != 0 {
+		return r.fatal(os.NewError("mongo: cursor not found"))
+	}
+
+	if r.resp[0].flags&queryFailure != 0 {
+		var m map[string]interface{}
+		err := Decode(r.resp[0].data, &m)
+		if err != nil {
+			return r.fatal(err)
+		} else if s, ok := m["$err"].(string); ok {
+			return r.fatal(os.NewError(s))
+		} else {
+			return r.fatal(os.NewError("mongo: query failure"))
+		}
+	}
+
+	return nil
 }
 
-func (c *cursor) HasNext() bool {
-	c.fill()
-	return c.count > 0
+func (r *cursor) Error() os.Error {
+    return r.err
 }
 
-func (c *cursor) Next(value interface{}) os.Error {
-	c.fill()
-	if c.err != nil {
-		return c.err
+func (r *cursor) HasNext() bool {
+	return r.fill() != EOF
+}
+
+func (r *cursor) Next(value interface{}) os.Error {
+	if err := r.fill(); err != nil {
+		return err
 	}
-	if c.count == 0 {
-		return EOF
+	if len(r.resp[0].data) < 4 {
+		return r.fatal(os.NewError("mongo: response data corrupted"))
 	}
-	if len(c.data) < 4 {
-		return c.fatal(os.NewError("mongo: response data corrupted"))
+	n := int(wire.Uint32(r.resp[0].data[0:4]))
+	if n > len(r.resp[0].data) {
+		return r.fatal(os.NewError("mongo: response data corrupted"))
 	}
-	n := int(wire.Uint32(c.data[0:4]))
-	if n > len(c.data) {
-		return c.fatal(os.NewError("mongo: response data corrupted"))
-	}
-	err := Decode(c.data[0:n], value)
-	c.data = c.data[n:]
-	c.count -= 1
+	err := Decode(r.resp[0].data[0:n], value)
+	r.resp[0].data = r.resp[0].data[n:]
+	r.resp[0].count -= 1
 	return err
 }
