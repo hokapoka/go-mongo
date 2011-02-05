@@ -86,7 +86,12 @@ type FindOptions struct {
 	// in the resulting dataset - when returning the result of the query.
 	Skip int
 
+	// Sets the number of documents to return. 
 	Limit int
+
+	// Sets the batch size used for sending documents from the server to the
+	// client.
+	BatchSize int
 }
 
 // A Conn represents a connection to a MongoDB server. 

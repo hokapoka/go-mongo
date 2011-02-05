@@ -49,9 +49,9 @@ var (
 	GetLastErrorWaitReplicasCmd = Doc{{"getLastError", 1}, {"w", 2}}
 )
 
-// ExecuteCommand executes the command cmd on the database specified by the
+// RunCommand executes the command cmd on the database specified by the
 // database component of namespace.
-func ExecuteCommand(conn Conn, namespace string, cmd, result interface{}) os.Error {
+func RunCommand(conn Conn, namespace string, cmd, result interface{}) os.Error {
 	db := namespace
 	if i := strings.Index(namespace, "."); i > 0 {
 		db = namespace[:i]
@@ -72,7 +72,7 @@ func GetLastError(conn Conn, namespace string, cmd interface{}, err os.Error) os
 		cmd = GetLastErrorCmd
 	}
 	var r map[string]interface{}
-	if err := ExecuteCommand(conn, namespace, cmd, &r); err != nil {
+	if err := RunCommand(conn, namespace, cmd, &r); err != nil {
 		return err
 	}
 	if e := r["err"]; e != nil {
@@ -81,7 +81,7 @@ func GetLastError(conn Conn, namespace string, cmd interface{}, err os.Error) os
 	return nil
 }
 
-func SafeInsert(conn Conn, namespace string, errorCmd interface{},documents ...interface{}) os.Error {
+func SafeInsert(conn Conn, namespace string, errorCmd interface{}, documents ...interface{}) os.Error {
 	return GetLastError(conn, namespace, errorCmd, conn.Insert(namespace, documents...))
 }
 
