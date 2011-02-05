@@ -196,11 +196,11 @@ func (c *connection) Find(namespace string, query interface{}, options *FindOpti
 		fields = options.Fields
 		r.limit = options.Limit
 		r.batchSize = options.BatchSize
-        if r.batchSize == 1 {
-            // Server handles numberToReturn == 1 as hard limit. Change value
-            // to two to avoid having batch size set hard limit.
-            r.batchSize = 2
-        }
+		if r.batchSize == 1 {
+			// Server handles numberToReturn == 1 as hard limit. Change value
+			// to two to avoid having batch size set hard limit.
+			r.batchSize = 2
+		}
 		if options.Tailable {
 			r.flags |= queryTailable
 			r.limit = 0
@@ -349,14 +349,14 @@ func (c *connection) receive() os.Error {
 }
 
 func (r *cursor) numberToReturn() uint32 {
-    n := r.batchSize
-    if r.limit > 0 {
-        n = r.limit - r.count
-        if r.batchSize > 0 && r.batchSize < n {
-            n = r.batchSize
-        }
-    } 
-    return uint32(n)
+	n := r.batchSize
+	if r.limit > 0 {
+		n = r.limit - r.count
+		if r.batchSize > 0 && r.batchSize < n {
+			n = r.batchSize
+		}
+	}
+	return uint32(n)
 }
 
 func (r *cursor) fatal(err os.Error) os.Error {
@@ -441,9 +441,9 @@ func (r *cursor) fill() os.Error {
 		}
 	}
 
-    if r.resp[0].count == 0 {
-        return r.fatal(EOF)
-    }
+	if r.resp[0].count == 0 {
+		return r.fatal(EOF)
+	}
 
 	return nil
 }
