@@ -18,27 +18,36 @@ import (
 	"testing"
 )
 
-var limitBatchTests = []struct {
-	limit, batchSize, count int
+var findOptionsTests = []struct {
+	limit         int
+	batchSize     int
+	exhaust       bool
+	expectedCount int
 }{
-	{0, 0, 200},
-	{0, 1, 200},
-	{0, 2, 200},
-	{0, 3, 200},
-	{0, 100, 200},
-	{0, 500, 200},
-	{1, 0, 1},
-	{1, 1, 1},
-	{1, 2, 1},
-	{1, 3, 1},
-	{1, 100, 1},
-	{1, 500, 1},
-	{10, 0, 10},
-	{10, 1, 10},
-	{10, 2, 10},
-	{10, 3, 10},
-	{10, 100, 10},
-	{10, 500, 10},
+	{0, 0, false, 200},
+	{0, 1, false, 200},
+	{0, 2, false, 200},
+	{0, 3, false, 200},
+	{0, 100, false, 200},
+	{0, 500, false, 200},
+
+	{1, 0, false, 1},
+	{1, 1, false, 1},
+	{1, 2, false, 1},
+	{1, 3, false, 1},
+	{1, 100, false, 1},
+	{1, 500, false, 1},
+
+	{10, 0, false, 10},
+	{10, 1, false, 10},
+	{10, 2, false, 10},
+	{10, 3, false, 10},
+	{10, 100, false, 10},
+	{10, 500, false, 10},
+
+	{200, 3, false, 200},
+	{200, 3, true, 200},
+	{0, 3, true, 200},
 }
 
 func TestBasic(t *testing.T) {
@@ -61,8 +70,11 @@ func TestBasic(t *testing.T) {
 		}
 	}
 
-	for _, tt := range limitBatchTests {
-		r, err := c.Find("go-mongo-test.test", Doc{}, &FindOptions{Limit: tt.limit, BatchSize: tt.batchSize})
+	for _, tt := range findOptionsTests {
+		r, err := c.Find("go-mongo-test.test", Doc{}, &FindOptions{
+			Limit:     tt.limit,
+			BatchSize: tt.batchSize,
+			Exhaust:   tt.exhaust})
 		if err != nil {
 			t.Fatal("find", err)
 		}
@@ -71,13 +83,13 @@ func TestBasic(t *testing.T) {
 			var m map[string]interface{}
 			err = r.Next(&m)
 			if err != nil {
-				t.Error("limitBatchTest:", tt, "count:", count, "next err:", err)
+				t.Error("findOptionsTest:", tt, "count:", count, "next err:", err)
 				break
 			}
 			count += 1
 		}
-		if count != tt.count {
-			t.Error("limitBatchTest:", tt, "bad count:", count)
+		if count != tt.expectedCount {
+			t.Error("findOptionsTest:", tt, "bad count:", count)
 		}
 	}
 }
