@@ -16,61 +16,48 @@ package mongo
 
 import (
 	"os"
-	"container/list"
-	"sync"
 )
 
 type Pool struct {
-	addr  string
-	lock  sync.Mutex
-	conns *list.List
+	newFn func() (Conn, os.Error)
+	conns chan Conn
 }
 
 type pooledConnection struct {
-	*connection
+	Conn
 	pool *Pool
 }
 
-func NewPool(addr string) *Pool {
-	return &Pool{addr: addr, conns: list.New()}
-}
-
-func (p *Pool) get() interface{} {
-	// To prevent connections from going stale, we take from the front and put
-	// to the back of the list.
-	p.lock.Lock()
-	defer p.lock.Unlock()
-	if p.conns.Len() > 0 {
-		return p.conns.Remove(p.conns.Front())
-	}
-	return nil
-}
-
-func (p *Pool) put(conn *connection) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-	p.conns.PushBack(conn)
+func NewPool(newFn func() (Conn, os.Error), maxIdle int) *Pool {
+	return &Pool{newFn: newFn, conns: make(chan Conn, maxIdle)}
 }
 
 func (p *Pool) Get() (Conn, os.Error) {
-	conn := p.get()
-	if conn == nil {
+	var c Conn
+	select {
+	case c = <-p.conns:
+	default:
 		var err os.Error
-		conn, err = Dial(p.addr)
+		c, err = p.newFn()
 		if err != nil {
 			return nil, err
 		}
 	}
-	return &pooledConnection{connection: conn.(*connection), pool: p}, nil
+	return &pooledConnection{Conn: c, pool: p}, nil
 }
 
 func (c *pooledConnection) Close() os.Error {
-	if c.connection == nil {
+	if c.Conn == nil {
 		return nil
 	}
-	if c.connection.err == nil {
-		c.pool.put(c.connection)
+	if c.Error() != nil {
+		return nil
 	}
-	c.connection = nil
+	select {
+	case c.pool.conns <- c.Conn:
+	default:
+		c.Conn.Close()
+	}
+	c.Conn = nil
 	return nil
 }

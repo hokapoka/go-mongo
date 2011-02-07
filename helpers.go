@@ -47,7 +47,7 @@ func RunCommand(conn Conn, namespace string, cmd, result interface{}) os.Error {
 	return FindOne(conn, db+".$cmd", cmd, nil, result)
 }
 
-var	getLastErrorCmd = Doc{{"getLastError", 1}}
+var getLastErrorCmd = Doc{{"getLastError", 1}}
 
 // GetLastError returns the last error for a database. The database is
 // specified by the database component of namespace. The command cmd is used to
@@ -88,8 +88,8 @@ type SafeConn struct {
 	// The connecion to wrap.
 	Conn
 
-    // The command document used to fetch the last error. If cmd is nil, then
-    // the command {"getLastError": 1} is used as the command.
+	// The command document used to fetch the last error. If cmd is nil, then
+	// the command {"getLastError": 1} is used as the command.
 	Cmd interface{}
 }
 
