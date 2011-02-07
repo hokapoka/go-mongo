@@ -442,6 +442,10 @@ func (r *cursor) fill() os.Error {
 	}
 
 	if r.resp[0].count == 0 {
+		r.resp = r.resp[1:]
+	}
+
+	if len(r.resp) == 0 && (r.cursorId == 0 || (r.flags&queryTailable) == 0) {
 		return r.fatal(EOF)
 	}
 
@@ -453,14 +457,22 @@ func (r *cursor) Error() os.Error {
 }
 
 func (r *cursor) HasNext() bool {
-	return r.fill() != EOF
+	if err := r.fill(); err != nil {
+		return err != EOF
+	}
+	return len(r.resp) > 0
 }
 
 func (r *cursor) Next(value interface{}) os.Error {
 	if err := r.fill(); err != nil {
 		return err
 	}
+	if len(r.resp) == 0 {
+		// tailable, no data available now
+		return EOF
+	}
 	if len(r.resp[0].data) < 4 {
+		fmt.Println("DATA", len(r.resp[0].data), r.resp[0].count)
 		return r.fatal(os.NewError("mongo: response data corrupted"))
 	}
 	n := int(wire.Uint32(r.resp[0].data[0:4]))

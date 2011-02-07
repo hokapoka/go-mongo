@@ -31,6 +31,7 @@ import (
 
 
 var (
+	// No more data in cursor.
 	EOF = os.NewError("mongo: eof")
 )
 

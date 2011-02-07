@@ -52,6 +52,9 @@ var (
 // RunCommand executes the command cmd on the database specified by the
 // database component of namespace.
 func RunCommand(conn Conn, namespace string, cmd, result interface{}) os.Error {
+	if result == nil {
+		result = &map[string]interface{}{}
+	}
 	db := namespace
 	if i := strings.Index(namespace, "."); i > 0 {
 		db = namespace[:i]

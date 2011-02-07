@@ -18,6 +18,19 @@ import (
 	"testing"
 )
 
+func dialAndDrop(t *testing.T, db string) Conn {
+	c, err := Dial("127.0.0.1")
+	if err != nil {
+		t.Fatal("dial", err)
+	}
+	err = RunCommand(c, db, Doc{{"dropDatabase", 1}}, nil)
+	if err != nil {
+		c.Close()
+		t.Fatal("drop", err)
+	}
+	return c
+}
+
 var findOptionsTests = []struct {
 	limit         int
 	batchSize     int
@@ -50,21 +63,12 @@ var findOptionsTests = []struct {
 	{0, 3, true, 200},
 }
 
-func TestBasic(t *testing.T) {
-	c, err := Dial("127.0.0.1")
-	if err != nil {
-		t.Fatal("dial", err)
-	}
+func TestFindOptions(t *testing.T) {
+	c := dialAndDrop(t, "go-mongo-test")
 	defer c.Close()
 
-	var m map[string]interface{}
-	err = RunCommand(c, "go-mongo-test", Doc{{"dropDatabase", 1}}, &m)
-	if err != nil {
-		t.Fatal("drop", err)
-	}
-
 	for i := 0; i < 200; i++ {
-		err = SafeInsert(c, "go-mongo-test.test", nil, map[string]int{"x": i})
+		err := SafeInsert(c, "go-mongo-test.test", nil, map[string]int{"x": i})
 		if err != nil {
 			t.Fatal("insert", err)
 		}
@@ -76,7 +80,8 @@ func TestBasic(t *testing.T) {
 			BatchSize: tt.batchSize,
 			Exhaust:   tt.exhaust})
 		if err != nil {
-			t.Fatal("find", err)
+			t.Error("find", err)
+			continue
 		}
 		count := 0
 		for r.HasNext() {
@@ -91,5 +96,54 @@ func TestBasic(t *testing.T) {
 		if count != tt.expectedCount {
 			t.Error("findOptionsTest:", tt, "bad count:", count)
 		}
+	}
+}
+
+func TestTailableCursor(t *testing.T) {
+	c := dialAndDrop(t, "go-mongo-test")
+	defer c.Close()
+
+	err := RunCommand(c, "go-mongo-test",
+		Doc{{"create", "capped"},
+			{"capped", true},
+			{"size", 1000.0}},
+		nil)
+	if err != nil {
+		t.Fatal("create capped", err)
+	}
+
+	var r Cursor
+	for n := 1; n < 4; n++ {
+		for i := 0; i < n; i++ {
+			err = SafeInsert(c, "go-mongo-test.capped", nil, map[string]int{"x": i})
+			if err != nil {
+				t.Fatal("insert", i, err)
+			}
+		}
+
+		if r == nil {
+			r, err = c.Find("go-mongo-test.capped", Doc{}, &FindOptions{Tailable: true})
+			if err != nil {
+				t.Fatal("find", err)
+			}
+			defer r.Close()
+		}
+
+		i := 0
+		for r.HasNext() {
+			var m map[string]interface{}
+			err = r.Next(&m)
+			if err != nil {
+				t.Fatal("next", n, i, err)
+			}
+			if m["x"] != int64(i) {
+				t.Fatal("expect", i, "actual", m["x"])
+			}
+			i += 1
+		}
+		if i != n {
+			t.Fatal("count: expect", n, "actual", i)
+		}
+
 	}
 }
