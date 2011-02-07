@@ -525,7 +525,7 @@ func (d *decodeState) decodeValueInterface(kind int) interface{} {
 	case kindSymbol:
 		return Symbol(d.scanString())
 	case kindInt32:
-		return d.scanInt32()
+		return int(d.scanInt32())
 	case kindTimestamp:
 		return Timestamp(d.scanInt64())
 	case kindInt64:

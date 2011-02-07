@@ -121,7 +121,7 @@ var bsonTests = []struct {
 		[]byte("\x0C\x00\x00\x00\x08test\x00\x00\x00")},
 	{new(stSymbol), stSymbol{Symbol("aSymbol")}, testMap(Symbol("aSymbol")),
 		[]byte("\x17\x00\x00\x00\x0Etest\x00\x08\x00\x00\x00aSymbol\x00\x00")},
-	{new(stInt32), stInt32{10}, testMap(int32(10)),
+	{new(stInt32), stInt32{10}, testMap(10),
 		[]byte("\x0F\x00\x00\x00\x10test\x00\x0A\x00\x00\x00\x00")},
 	{new(stInt64), stInt64{256}, testMap(int64(256)),
 		[]byte("\x13\x00\x00\x00\x12test\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00")},

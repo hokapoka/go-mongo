@@ -136,7 +136,7 @@ func TestTailableCursor(t *testing.T) {
 			if err != nil {
 				t.Fatal("next", n, i, err)
 			}
-			if m["x"] != int64(i) {
+			if m["x"] != i {
 				t.Fatal("expect", i, "actual", m["x"])
 			}
 			i += 1
