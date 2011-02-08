@@ -24,8 +24,8 @@ import (
 
 var ErrEOD = os.NewError("bson: unexpected end of data when parsing BSON")
 
-// DecodeConvertError is returned when decoder cannot convert an input type to
-// an output type.
+// DecodeConvertError is returned when decoder cannot convert BSON value to the
+// target type.
 type DecodeConvertError struct {
 	kind int
 	t    reflect.Type
@@ -45,7 +45,33 @@ func (e *DecodeTypeError) String() string {
 	return "bson: could not decode " + kindName(e.kind)
 }
 
-// Deocde decodes BSON data to value.
+// Deocde decodes BSON data to value v.
+//
+// Decode traverses the value v recursively. Decode uese the inverse of the
+// encodings supported by Encode, allocating maps, slices and pointers as
+// needed. The following conversions from BSON types to GO types are supported:
+//
+//      BSON                -> Go
+//      32-bit integer      -> int, int32, int64, float32, float64, bool
+//      64-bit integer      -> int64, int, int32, float32, float64, bool
+//      Array               -> []interface{}, other slice types
+//      Binary              -> []byte
+//      Boolean             -> bool
+//      Datetime            -> mongo.Datetime, int64
+//      Document            -> map[string]interface{}, struct types
+//      Double              -> float64, float32, int, int32, int64
+//      MinValue, MaxValue  -> mongo.MinMax
+//      ObjectID            -> mongo.ObjectID
+//      Symbol              -> mongo.Symbol, string
+//      Timestamp           -> mongo.Timestamp, int64
+//      string              -> string
+//
+// If a number overflows the target type or the BSON value cannot be converted
+// to the target type, then the decoding completes the best it can and an error
+// is returned.
+//
+// To decode a BSON value into a nil interface value, the first type listed in
+// the right hand column of the table above is used.
 func Decode(data []byte, v interface{}) (err os.Error) {
 	defer func() {
 		if r := recover(); r != nil {

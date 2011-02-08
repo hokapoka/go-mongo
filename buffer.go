@@ -20,9 +20,11 @@ import (
 
 var wire = binary.LittleEndian
 
-type buffer []byte
+// Buffer wraps a byte slice with convenience methods for writing BSON
+// encodings and MongoDB messages.
+type Buffer []byte
 
-func (b *buffer) Next(n int) []byte {
+func (b *Buffer) Next(n int) []byte {
 	begin := len(*b)
 	end := begin + n
 	if end > cap(*b) {
@@ -34,22 +36,22 @@ func (b *buffer) Next(n int) []byte {
 	return (*b)[begin:end]
 }
 
-func (b *buffer) WriteString(s string) {
+func (b *Buffer) WriteString(s string) {
 	copy(b.Next(len(s)), s)
 }
 
-func (b *buffer) Write(p []byte) {
+func (b *Buffer) Write(p []byte) {
 	copy(b.Next(len(p)), p)
 }
 
-func (b *buffer) WriteByte(n byte) {
+func (b *Buffer) WriteByte(n byte) {
 	b.Next(1)[0] = n
 }
 
-func (b *buffer) WriteUint32(n uint32) {
+func (b *Buffer) WriteUint32(n uint32) {
 	wire.PutUint32(b.Next(4), n)
 }
 
-func (b *buffer) WriteUint64(n uint64) {
+func (b *Buffer) WriteUint64(n uint64) {
 	wire.PutUint64(b.Next(8), n)
 }

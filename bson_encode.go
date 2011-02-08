@@ -41,10 +41,54 @@ type interfaceOrPtrValue interface {
 }
 
 type encodeState struct {
-	buffer
+	Buffer
 }
 
 // Encode appends the BSON encoding of doc to buf and returns the new slice.
+//
+// Encode traverses the value doc recursively using the following
+// type-dependent encodings:
+//
+// Struct values encode as BSON documents. Each struct field becomes an element
+// of the document using the field name as the element key. If the struct field
+// has a tag, then the tag is used as the element name. Only exported names are
+// encoded.  
+//
+// Array and slice values encode as BSON arrays.
+//
+// Map values encode as BSON documents. The map's key type must be string; the
+// object keys are used directly as map keys.
+//
+// Pointer values encode as the value pointed to. A nil pointer encodes as a BSON null.
+//
+// Interface values encode as the value contained in the interface. A nil
+// interface value encodes as BSON null.
+// 
+// Other types are encoded as follows
+//
+//      Go                  -> BSON
+//      bool                -> Boolean
+//      float32             -> Double
+//      float64             -> Double
+//      int32               -> 32-bit Integer
+//      int                 -> 32-bit Integer
+//      int64               -> 64-bit Integer
+//      string              -> String
+//      []byte              -> Binary data
+//      mongo.Code          -> Javascript code
+//      mongo.CodeWithScope -> Javascript code with scope
+//      mongo.DateTime      -> UTC Datetime
+//      mongo.Doc           -> Document. Use when element order is important.
+//      mongo.MinMax        -> Minimum / Maximum value
+//      mongo.ObjectId      -> ObjectId
+//      mongo.Regexp        -> Regular expression
+//      mongo.Symbol        -> Symbol
+//      mongo.Timestamp     -> Timestamp
+//
+// Other types including channels, complex and function values cannot be encoded.
+//
+// BSON cannot represent cyclic data structurs and Encode does not handle them.
+// Passing cyclic structures to Encode will result in an infinite recursion.
 func Encode(buf []byte, doc interface{}) (result []byte, err os.Error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -60,7 +104,7 @@ func Encode(buf []byte, doc interface{}) (result []byte, err os.Error) {
 		v = pv.Elem()
 	}
 
-	e := encodeState{buffer: buf}
+	e := encodeState{Buffer: buf}
 	switch v := v.(type) {
 	case *reflect.StructValue:
 		e.writeStruct(v)
@@ -73,7 +117,7 @@ func Encode(buf []byte, doc interface{}) (result []byte, err os.Error) {
 			return nil, &EncodeTypeError{v.Type()}
 		}
 	}
-	return e.buffer, nil
+	return e.Buffer, nil
 }
 
 func (e *encodeState) abort(err os.Error) {
@@ -81,14 +125,14 @@ func (e *encodeState) abort(err os.Error) {
 }
 
 func (e *encodeState) beginDoc() (offset int) {
-	offset = len(e.buffer)
-	e.buffer.Next(4)
+	offset = len(e.Buffer)
+	e.Buffer.Next(4)
 	return
 }
 
 func (e *encodeState) endDoc(offset int) {
-	n := len(e.buffer) - offset
-	wire.PutUint32(e.buffer[offset:offset+4], uint32(n))
+	n := len(e.Buffer) - offset
+	wire.PutUint32(e.Buffer[offset:offset+4], uint32(n))
 }
 
 func (e *encodeState) writeKindName(kind int, name string) {
@@ -293,7 +337,6 @@ func init() {
 	}
 	typeEncoder = map[reflect.Type]encoderFunc{
 		typeDoc:                         encodeDoc,
-		reflect.Typeof([]byte{}):        encodeByteSlice,
 		reflect.Typeof(Code("")):        func(e *encodeState, name string, value reflect.Value) { encodeString(e, kindCode, name, value) },
 		reflect.Typeof(CodeWithScope{}): encodeCodeWithScope,
 		reflect.Typeof(DateTime(0)):     func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindDateTime, name, value) },
@@ -302,5 +345,6 @@ func init() {
 		reflect.Typeof(Regexp{}):        encodeRegexp,
 		reflect.Typeof(Symbol("")):      func(e *encodeState, name string, value reflect.Value) { encodeString(e, kindSymbol, name, value) },
 		reflect.Typeof(Timestamp(0)):    func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindTimestamp, name, value) },
+		reflect.Typeof([]byte{}):        encodeByteSlice,
 	}
 }

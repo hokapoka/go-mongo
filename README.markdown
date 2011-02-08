@@ -2,7 +2,7 @@
 
 go-mongo is a [Go](http://golang.org/) driver for [MongoDB](http://www.mongodb.org/). 
 
-This driver has had minimal testing. It works for me. 
+## Documentation
 
 See the godoc comments for documentation.
 
