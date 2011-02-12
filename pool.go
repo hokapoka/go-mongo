@@ -18,6 +18,29 @@ import (
 	"os"
 )
 
+// Pool maintains a pool of database connections.
+//
+// The following example shows how to use a pool in a web application. The
+// application creates a pool at application startup and makes it available to
+// request handlers, possibly using a global variable:
+//
+//  pool = mongo.NewPool(
+//    func() (mongo.Conn, os.Error) { return mongo.Dial("localhost") }, 
+//    2)
+//
+// A request handler gets a connection from the pool and closes the connection
+// when the handler is done:
+//
+//  conn, err := pool.Get()
+//  if err != nil {
+//      // handle the error
+//  }
+//  defer conn.Close()
+//  // do something with the connection
+//
+// Close() returns the connection to the pool if there's room in the pool and
+// the connection does not have a permanent error. Otherwise, Close() releases
+// the resources used by the connection.
 type Pool struct {
 	newFn func() (Conn, os.Error)
 	conns chan Conn
@@ -28,6 +51,8 @@ type pooledConnection struct {
 	pool *Pool
 }
 
+// NewPool returns a new connection pool. The pool uses newFn to create
+// connections as needed and maintains a maximum of maxIdle idle connections.
 func NewPool(newFn func() (Conn, os.Error), maxIdle int) *Pool {
 	return &Pool{newFn: newFn, conns: make(chan Conn, maxIdle)}
 }
