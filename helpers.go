@@ -71,14 +71,17 @@ func GetLastError(conn Conn, namespace string, cmd interface{}, err os.Error) os
 	return nil
 }
 
+// SafeInsert returns the last error from the database after calling conn->Insert().
 func SafeInsert(conn Conn, namespace string, errorCmd interface{}, documents ...interface{}) os.Error {
 	return GetLastError(conn, namespace, errorCmd, conn.Insert(namespace, documents...))
 }
 
+// SafeUpdate returns the last error from the database after calling conn->Update().
 func SafeUpdate(conn Conn, namespace string, errorCmd, selector, update interface{}, options *UpdateOptions) os.Error {
 	return GetLastError(conn, namespace, errorCmd, conn.Update(namespace, selector, update, options))
 }
 
+// SafeRemove returns the last error from the database after calling conn->Remove().
 func SafeRemove(conn Conn, namespace string, errorCmd, selector interface{}, options *RemoveOptions) os.Error {
 	return GetLastError(conn, namespace, errorCmd, conn.Remove(namespace, selector, options))
 }

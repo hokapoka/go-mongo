@@ -28,6 +28,9 @@ import (
 //    func() (mongo.Conn, os.Error) { return mongo.Dial("localhost") }, 
 //    2)
 //
+// This pool uses a simple database connection and a maximum of two idle
+// connections.
+//
 // A request handler gets a connection from the pool and closes the connection
 // when the handler is done:
 //
@@ -57,6 +60,9 @@ func NewPool(newFn func() (Conn, os.Error), maxIdle int) *Pool {
 	return &Pool{newFn: newFn, conns: make(chan Conn, maxIdle)}
 }
 
+// Get returns an idle connection from the pool if available or creates a new
+// connection. The caller should Close() the connection to return the
+// connection to the pool.
 func (p *Pool) Get() (Conn, os.Error) {
 	var c Conn
 	select {
