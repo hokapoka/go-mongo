@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+{.section PDoc}
+<html>
+<head>
+<title>Go-Mongo: {PackageName}</title>
+<link rel="stylesheet" href="../static/base.css" type="text/css"/> 
+</head>
+<body>
+<div id="content"> 
+<h1><a href="..">Go-Mongo</a>: {PackageName}</h1>
+
+<h4>Table Of Contents</h4>
+<ul>
+<li><a href="#package">Package</a>
+{.section Consts}
+<li><a href="#constants">Constants</a>
+{.end}
+{.section Vars}
+<li><a href="#variables">Variables</a>
+{.end}
+{.repeated section Funcs}
+<li><a href="#{Name}">func {Name}</a>
+{.end}
+{.repeated section Types}
+<li><a href="#{Type.Name}">type {Type.Name}</a>
+    {.section Factories}
+        <ul>
+    {.or}
+        {.section Methods}
+            <ul>
+        {.end}
+    {.end}
+    {.repeated section Factories}
+    <li><a href="#{Name}">func {Name}</a>
+    {.end}
+    {.repeated section Methods}
+    <li><a href="#{Type.Name}.{Name}">func ({Recv}) {Name}</a>
+    {.end}
+    {.section Factories}
+        </ul>
+    {.or}
+        {.section Methods}
+            </ul>
+        {.end}
+    {.end}
+{.end}
+</ul>
+
+<h2 id="package">Package</h2>
+
+<p><code>import "{ImportPath}"</code></p>
+
+{Doc|comment}
+
+{.section Consts}
+<h2 id="constants">Constants</h2>
+{.repeated section @}
+{Doc|comment}
+<pre>
+{Decl}
+</pre>
+{.end}
+{.end}
+
+{.section Vars}
+<h2 id="variables">Variables</h2>
+{.repeated section @}
+{Doc|comment}
+<pre>
+{Decl}
+</pre>
+{.end}
+{.end}
+
+{.repeated section Funcs}
+<h2 id="{Name}">func {Name}</h2>
+<p><code>{Decl}</code></p>
+{Doc|comment}
+{.end}
+
+{.repeated section Types}
+<h2 id="{Type.Name}">type {Type.Name}</h2>
+{Doc|comment}
+<pre>{Decl}</pre>
+
+    {.repeated section Consts}
+    {Doc|comment}
+    <pre>
+    {Decl}
+    </pre>
+    {.end}
+
+    {.repeated section Vars}
+    {Doc|comment}
+    <pre>
+    {Decl}
+    </pre>
+    {.end}
+
+    {.repeated section Factories}
+    <h3 id="{Name}">func {Name}</h3>
+    <p><code>{Decl}</code></p>
+    {Doc|comment}
+    {.end}
+
+    {.repeated section Methods}
+    <h3 id="{Type.Name}.{Name}">func ({Recv}) {Name}</h3>
+    <p><code>{Decl}</code></p>
+    {Doc|comment}
+    {.end}
+
+{.end}
+<hr>
+This page was generated automatically from the source code. If you installed
+Go-Mongo using <a href="http://golang.org/cmd/goinstall/">goinstall</a>, then
+you can also view the source documentation with <a
+href="http://golang.org/cmd/godoc/">godoc</a>.  
+</div>
+</body>
+</html>
+{.end}

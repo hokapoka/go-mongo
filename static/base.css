@@ -1,0 +1,60 @@
+body {
+  background: white;
+  color: black;
+  font-family: Georgia, serif;
+  font-size: 11pt;
+  margin: 10px;
+  margin-top: 15px;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+#content {
+  max-width: 850px;
+  text-align: left;
+  margin: 0 auto;
+}
+
+img {
+  border: 0;
+}
+
+a {
+  color: #216093;
+}
+
+table {
+  border-collapse: collapse;
+  border: 0;
+}
+
+td {
+  border: 0;
+  padding: 0;
+}
+
+p, li {
+  line-height: 16pt;
+}
+
+pre {
+  background: #eee;
+  padding: 3px;
+}
+
+h1, h2, h3, h4 {
+  color: #4d8cbf;
+  font-family: Calibri, sans-serif;
+}
+
+h1 {
+  font-size: 19pt;
+}
+
+h2 {
+  font-size: 15pt;
+}
+
+h3 {
+  font-size: 13pt;
+}

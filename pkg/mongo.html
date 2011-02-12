@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Go-Mongo: mongo</title>
+<link rel="stylesheet" href="../static/base.css" type="text/css"/> 
+</head>
+<body>
+<div id="content"> 
+<h1><a href="..">Go-Mongo</a>: mongo</h1>
+
+<h4>Table Of Contents</h4>
+<ul>
+<li><a href="#package">Package</a>
+<li><a href="#variables">Variables</a>
+<li><a href="#Decode">func Decode</a>
+<li><a href="#Encode">func Encode</a>
+<li><a href="#FindOne">func FindOne</a>
+<li><a href="#GetLastError">func GetLastError</a>
+<li><a href="#RunCommand">func RunCommand</a>
+<li><a href="#SafeInsert">func SafeInsert</a>
+<li><a href="#SafeRemove">func SafeRemove</a>
+<li><a href="#SafeUpdate">func SafeUpdate</a>
+<li><a href="#Buffer">type Buffer</a>
+            <ul>
+    <li><a href="#Buffer.Next">func (*Buffer) Next</a>
+    <li><a href="#Buffer.Write">func (*Buffer) Write</a>
+    <li><a href="#Buffer.WriteByte">func (*Buffer) WriteByte</a>
+    <li><a href="#Buffer.WriteString">func (*Buffer) WriteString</a>
+    <li><a href="#Buffer.WriteUint32">func (*Buffer) WriteUint32</a>
+    <li><a href="#Buffer.WriteUint64">func (*Buffer) WriteUint64</a>
+            </ul>
+<li><a href="#Code">type Code</a>
+<li><a href="#CodeWithScope">type CodeWithScope</a>
+<li><a href="#Conn">type Conn</a>
+        <ul>
+    <li><a href="#Dial">func Dial</a>
+        </ul>
+<li><a href="#Cursor">type Cursor</a>
+<li><a href="#DateTime">type DateTime</a>
+<li><a href="#DecodeConvertError">type DecodeConvertError</a>
+            <ul>
+    <li><a href="#DecodeConvertError.String">func (*DecodeConvertError) String</a>
+            </ul>
+<li><a href="#DecodeTypeError">type DecodeTypeError</a>
+            <ul>
+    <li><a href="#DecodeTypeError.String">func (*DecodeTypeError) String</a>
+            </ul>
+<li><a href="#Doc">type Doc</a>
+<li><a href="#EncodeTypeError">type EncodeTypeError</a>
+            <ul>
+    <li><a href="#EncodeTypeError.String">func (*EncodeTypeError) String</a>
+            </ul>
+<li><a href="#FindOptions">type FindOptions</a>
+<li><a href="#MinMax">type MinMax</a>
+<li><a href="#ObjectId">type ObjectId</a>
+        <ul>
+    <li><a href="#NewObjectId">func NewObjectId</a>
+        </ul>
+<li><a href="#Pool">type Pool</a>
+        <ul>
+    <li><a href="#NewPool">func NewPool</a>
+    <li><a href="#Pool.Get">func (*Pool) Get</a>
+        </ul>
+<li><a href="#Regexp">type Regexp</a>
+<li><a href="#RemoveOptions">type RemoveOptions</a>
+<li><a href="#SafeConn">type SafeConn</a>
+            <ul>
+    <li><a href="#SafeConn.Insert">func (SafeConn) Insert</a>
+    <li><a href="#SafeConn.Remove">func (SafeConn) Remove</a>
+    <li><a href="#SafeConn.Update">func (SafeConn) Update</a>
+            </ul>
+<li><a href="#Symbol">type Symbol</a>
+<li><a href="#Timestamp">type Timestamp</a>
+<li><a href="#UpdateOptions">type UpdateOptions</a>
+</ul>
+
+<h2 id="package">Package</h2>
+
+<p><code>import "github.com/garyburd/go-mongo"</code></p>
+
+<p>
+The mongo package is a driver for MongoDB.
+</p>
+<p>
+This driver uses a namespace string to specify the database and collection
+for all operations. The namespace string is in the format
+&#34;&lt;database&gt;.&lt;collection&gt;&#34; where &lt;database&gt; is the name of the database and
+&lt;collection&gt; is the name of the collection. Most other MongoDB drivers use
+database and collection objects to specify the database and collection.
+</p>
+<p>
+This driver does not provide command helpers. See
+<a href="http://www.snailinaturtleneck.com/blog/2011/01/25/why-command-helpers-suck/">http://www.snailinaturtleneck.com/blog/2011/01/25/why-command-helpers-suck/</a>
+for some thoughts on command helpers.
+</p>
+
+
+
+<h2 id="variables">Variables</h2>
+
+<pre>
+var (
+ // No more data in cursor.
+ EOF = os.NewError(&#34;mongo: eof&#34;)
+)
+</pre>
+
+<pre>
+var ErrEOD = os.NewError(&#34;bson: unexpected end of data when parsing BSON&#34;)
+</pre>
+
+<h2 id="Decode">func Decode</h2>
+<p><code>func Decode(data []byte, v interface{}) (err os.Error)</code></p>
+<p>
+Deocde decodes BSON data to value v.
+</p>
+<p>
+Decode traverses the value v recursively. Decode uese the inverse of the
+encodings supported by Encode, allocating maps, slices and pointers as
+needed. The following conversions from BSON types to GO types are supported:
+</p>
+<pre>BSON                -&gt; Go
+32-bit integer      -&gt; int, int32, int64, float32, float64, bool
+64-bit integer      -&gt; int64, int, int32, float32, float64, bool
+Array               -&gt; []interface{}, other slice types
+Binary              -&gt; []byte
+Boolean             -&gt; bool
+Datetime            -&gt; mongo.Datetime, int64
+Document            -&gt; map[string]interface{}, struct types
+Double              -&gt; float64, float32, int, int32, int64
+MinValue, MaxValue  -&gt; mongo.MinMax
+ObjectID            -&gt; mongo.ObjectID
+Symbol              -&gt; mongo.Symbol, string
+Timestamp           -&gt; mongo.Timestamp, int64
+string              -&gt; string
+</pre>
+<p>
+If a number overflows the target type or the BSON value cannot be converted
+to the target type, then the decoding completes the best it can and an error
+is returned.
+</p>
+<p>
+To decode a BSON value into a nil interface value, the first type listed in
+the right hand column of the table above is used.
+</p>
+
+<h2 id="Encode">func Encode</h2>
+<p><code>func Encode(buf []byte, doc interface{}) (result []byte, err os.Error)</code></p>
+<p>
+Encode appends the BSON encoding of doc to buf and returns the new slice.
+</p>
+<p>
+Encode traverses the value doc recursively using the following
+type-dependent encodings:
+</p>
+<p>
+Struct values encode as BSON documents. Each struct field becomes an element
+of the document using the field name as the element key. If the struct field
+has a tag, then the tag is used as the element name. Only exported names are
+encoded.
+</p>
+<p>
+Array and slice values encode as BSON arrays.
+</p>
+<p>
+Map values encode as BSON documents. The map&#39;s key type must be string; the
+object keys are used directly as map keys.
+</p>
+<p>
+Pointer values encode as the value pointed to. A nil pointer encodes as a BSON null.
+</p>
+<p>
+Interface values encode as the value contained in the interface. A nil
+interface value encodes as BSON null.
+</p>
+<p>
+Other types are encoded as follows
+</p>
+<pre>Go                  -&gt; BSON
+bool                -&gt; Boolean
+float32             -&gt; Double
+float64             -&gt; Double
+int32               -&gt; 32-bit Integer
+int                 -&gt; 32-bit Integer
+int64               -&gt; 64-bit Integer
+string              -&gt; String
+[]byte              -&gt; Binary data
+mongo.Code          -&gt; Javascript code
+mongo.CodeWithScope -&gt; Javascript code with scope
+mongo.DateTime      -&gt; UTC Datetime
+mongo.Doc           -&gt; Document. Use when element order is important.
+mongo.MinMax        -&gt; Minimum / Maximum value
+mongo.ObjectId      -&gt; ObjectId
+mongo.Regexp        -&gt; Regular expression
+mongo.Symbol        -&gt; Symbol
+mongo.Timestamp     -&gt; Timestamp
+</pre>
+<p>
+Other types including channels, complex and function values cannot be encoded.
+</p>
+<p>
+BSON cannot represent cyclic data structurs and Encode does not handle them.
+Passing cyclic structures to Encode will result in an infinite recursion.
+</p>
+
+<h2 id="FindOne">func FindOne</h2>
+<p><code>func FindOne(conn Conn, namespace string, query interface{}, options *FindOptions, result interface{}) os.Error</code></p>
+<p>
+FindOne returns a single result for a query.
+</p>
+
+<h2 id="GetLastError">func GetLastError</h2>
+<p><code>func GetLastError(conn Conn, namespace string, cmd interface{}, err os.Error) os.Error</code></p>
+<p>
+GetLastError returns the last error for a database. The database is
+specified by the database component of namespace. The command cmd is used to
+fetch the last error. If cmd is nil, then the command {&#34;getLasetError&#34;: 1}
+is used to get the error.  If the err argument is not nil, then err is
+returned directly from the function.
+</p>
+
+<h2 id="RunCommand">func RunCommand</h2>
+<p><code>func RunCommand(conn Conn, namespace string, cmd, result interface{}) os.Error</code></p>
+<p>
+RunCommand executes the command cmd on the database specified by the
+database component of namespace.
+</p>
+
+<h2 id="SafeInsert">func SafeInsert</h2>
+<p><code>func SafeInsert(conn Conn, namespace string, errorCmd interface{}, documents ...interface{}) os.Error</code></p>
+<p>
+SafeInsert returns the last error from the database after calling conn-&gt;Insert().
+</p>
+
+<h2 id="SafeRemove">func SafeRemove</h2>
+<p><code>func SafeRemove(conn Conn, namespace string, errorCmd, selector interface{}, options *RemoveOptions) os.Error</code></p>
+<p>
+SafeRemove returns the last error from the database after calling conn-&gt;Remove().
+</p>
+
+<h2 id="SafeUpdate">func SafeUpdate</h2>
+<p><code>func SafeUpdate(conn Conn, namespace string, errorCmd, selector, update interface{}, options *UpdateOptions) os.Error</code></p>
+<p>
+SafeUpdate returns the last error from the database after calling conn-&gt;Update().
+</p>
+
+
+<h2 id="Buffer">type Buffer</h2>
+<p>
+Buffer wraps a byte slice with convenience methods for writing BSON
+encodings and MongoDB messages.
+</p>
+
+<pre>type Buffer []byte</pre>
+
+
+
+
+    <h3 id="Buffer.Next">func (*Buffer) Next</h3>
+    <p><code>func (b *Buffer) Next(n int) []byte</code></p>
+    
+    <h3 id="Buffer.Write">func (*Buffer) Write</h3>
+    <p><code>func (b *Buffer) Write(p []byte)</code></p>
+    
+    <h3 id="Buffer.WriteByte">func (*Buffer) WriteByte</h3>
+    <p><code>func (b *Buffer) WriteByte(n byte)</code></p>
+    
+    <h3 id="Buffer.WriteString">func (*Buffer) WriteString</h3>
+    <p><code>func (b *Buffer) WriteString(s string)</code></p>
+    
+    <h3 id="Buffer.WriteUint32">func (*Buffer) WriteUint32</h3>
+    <p><code>func (b *Buffer) WriteUint32(n uint32)</code></p>
+    
+    <h3 id="Buffer.WriteUint64">func (*Buffer) WriteUint64</h3>
+    <p><code>func (b *Buffer) WriteUint64(n uint64)</code></p>
+    
+
+<h2 id="Code">type Code</h2>
+<p>
+Code represents javascript code in BSON.
+</p>
+
+<pre>type Code string</pre>
+
+
+
+
+
+<h2 id="CodeWithScope">type CodeWithScope</h2>
+<p>
+CodeWithScope represents javascript in BSON.
+</p>
+
+<pre>type CodeWithScope struct {
+ Code  string
+ Scope map[string]interface{}
+}</pre>
+
+
+
+
+
+<h2 id="Conn">type Conn</h2>
+<p>
+A Conn represents a connection to a MongoDB server.
+</p>
+
+<pre>type Conn interface {
+ // Close releases the resources used by this connection.
+ Close() os.Error
+
+ // Error returns non-nil if the connection has a permanent error.
+ Error() os.Error
+
+ // Update document specified by selector with update.
+ Update(namespace string, selector, update interface{}, options *UpdateOptions) os.Error
+
+ // Insert documents.
+ Insert(namespace string, documents ...interface{}) os.Error
+
+ // Remove documents specified by seletor.
+ Remove(namespace string, selector interface{}, options *RemoveOptions) os.Error
+
+ // Find documents specified by selector. The returned cursor must be closed.
+ Find(namespace string, query interface{}, options *FindOptions) (Cursor, os.Error)
+}</pre>
+
+
+
+    <h3 id="Dial">func Dial</h3>
+    <p><code>func Dial(addr string) (Conn, os.Error)</code></p>
+    <p>
+Dial connects to server at addr.
+</p>
+
+
+
+<h2 id="Cursor">type Cursor</h2>
+
+<pre>type Cursor interface {
+ // Close releases the resources used by this connection. 
+ Close() os.Error
+
+ // Error returns non-nil if the cursor has a permanent error.
+ Error() os.Error
+
+ // HasNext returns true if there are more documents in the cursor.
+ HasNext() bool
+
+ // Next fetches the next document from the cursor.
+ Next(value interface{}) os.Error
+}</pre>
+
+
+
+
+
+<h2 id="DateTime">type DateTime</h2>
+<p>
+DateTime represents a BSON timestamp.
+</p>
+
+<pre>type DateTime int64</pre>
+
+
+
+
+
+<h2 id="DecodeConvertError">type DecodeConvertError</h2>
+<p>
+DecodeConvertError is returned when decoder cannot convert BSON value to the
+target type.
+</p>
+
+<pre>type DecodeConvertError struct {
+ // contains unexported fields
+}</pre>
+
+
+
+
+    <h3 id="DecodeConvertError.String">func (*DecodeConvertError) String</h3>
+    <p><code>func (e *DecodeConvertError) String() string</code></p>
+    
+
+<h2 id="DecodeTypeError">type DecodeTypeError</h2>
+<p>
+DecodeTypeError is returned when the deocoder encounters an unknown type in
+the input.
+</p>
+
+<pre>type DecodeTypeError struct {
+ // contains unexported fields
+}</pre>
+
+
+
+
+    <h3 id="DecodeTypeError.String">func (*DecodeTypeError) String</h3>
+    <p><code>func (e *DecodeTypeError) String() string</code></p>
+    
+
+<h2 id="Doc">type Doc</h2>
+<p>
+Doc represents a BSON document. Use Doc instead of a native Go map when the
+order of the key-value pairs is important.
+</p>
+
+<pre>type Doc []struct {
+ Key   string
+ Value interface{}
+}</pre>
+
+
+
+
+
+<h2 id="EncodeTypeError">type EncodeTypeError</h2>
+<p>
+EncodeTypeError is the error indicating that Encode could not encode an input type.
+</p>
+
+<pre>type EncodeTypeError struct {
+ Type reflect.Type
+}</pre>
+
+
+
+
+    <h3 id="EncodeTypeError.String">func (*EncodeTypeError) String</h3>
+    <p><code>func (e *EncodeTypeError) String() string</code></p>
+    
+
+<h2 id="FindOptions">type FindOptions</h2>
+
+<pre>type FindOptions struct {
+ // Optional document that limits the fields in the returned documents.
+ // Fields contains one or more elements, each of which is the name of a
+ // field that should be returned, and and the integer value 1. 
+ Fields interface{}
+
+ // Tailable means cursor is not closed when the last data is retrieved.
+ // Rather, the cursor marks the final object&#39;s position. You can resume
+ // using the cursor later, from where it was located, if more data were
+ // received. 
+ Tailable bool
+
+ // Allow query of replica slave. Normally these return an error except for
+ // namespace &#34;local&#34;.
+ SlaveOk bool
+
+ // The server normally times out idle cursors after an inactivity period
+ // (10 minutes) to prevent excess memory use. Set this option to prevent
+ // that.
+ NoCursorTimeout bool
+
+ // Use with TailableCursor. If we are at the end of the data, block for a
+ // while rather than returning no data. After a timeout period, we do
+ // return as normal.
+ AwaitData bool
+
+ // Stream the data down full blast in multiple &#34;more&#34; packages, on the
+ // assumption that the client will fully read all data queried. Faster when
+ // you are pulling a lot of data and know you want to pull it all down.
+ // Note: the client is not allowed to not read all the data unless it
+ // closes the connection.
+ Exhaust bool
+
+ // Sets the number of documents to omit - starting from the first document
+ // in the resulting dataset - when returning the result of the query.
+ Skip int
+
+ // Sets the number of documents to return. 
+ Limit int
+
+ // Sets the batch size used for sending documents from the server to the
+ // client.
+ BatchSize int
+}</pre>
+
+
+
+
+
+<h2 id="MinMax">type MinMax</h2>
+<p>
+MinMax represents either a minimum or maxium BSON value.
+</p>
+
+<pre>type MinMax int</pre>
+
+    
+    <pre>
+    const (
+ // MaxValue is the maximum BSON value.
+ MaxValue MinMax = 1
+ // MinValue is the Minimum BSON value.
+ MinValue MinMax = -1
+)
+    </pre>
+
+
+
+
+<h2 id="ObjectId">type ObjectId</h2>
+<p>
+ObjectId represents a BSON object identifier.
+</p>
+
+<pre>type ObjectId [12]byte</pre>
+
+
+
+    <h3 id="NewObjectId">func NewObjectId</h3>
+    <p><code>func NewObjectId() ObjectId</code></p>
+    <p>
+NewObjectId returns a new object id.  This funtion uses the following format
+for object ids:
+</p>
+<pre>[0:4] Time since epoch in seconds. This is compatible
+      with other drivers.
+
+[4:12] Incrementing counter intialized with crypto random
+       number. This ensures that object ids are unique, but
+       is simpler than the format used by other drivers.
+</pre>
+
+
+
+<h2 id="Pool">type Pool</h2>
+<p>
+Pool maintains a pool of database connections.
+</p>
+<p>
+The following example shows how to use a pool in a web application. The
+application creates a pool at application startup and makes it available to
+request handlers, possibly using a global variable:
+</p>
+<pre>pool = mongo.NewPool(
+  func() (mongo.Conn, os.Error) { return mongo.Dial(&#34;localhost&#34;) },
+  2)
+</pre>
+<p>
+This pool uses a simple database connection and a maximum of two idle
+connections.
+</p>
+<p>
+A request handler gets a connection from the pool and closes the connection
+when the handler is done:
+</p>
+<pre>conn, err := pool.Get()
+if err != nil {
+    // handle the error
+}
+defer conn.Close()
+// do something with the connection
+</pre>
+<p>
+Close() returns the connection to the pool if there&#39;s room in the pool and
+the connection does not have a permanent error. Otherwise, Close() releases
+the resources used by the connection.
+</p>
+
+<pre>type Pool struct {
+ // contains unexported fields
+}</pre>
+
+
+
+    <h3 id="NewPool">func NewPool</h3>
+    <p><code>func NewPool(newFn func() (Conn, os.Error), maxIdle int) *Pool</code></p>
+    <p>
+NewPool returns a new connection pool. The pool uses newFn to create
+connections as needed and maintains a maximum of maxIdle idle connections.
+</p>
+
+
+    <h3 id="Pool.Get">func (*Pool) Get</h3>
+    <p><code>func (p *Pool) Get() (Conn, os.Error)</code></p>
+    <p>
+Get returns an idle connection from the pool if available or creates a new
+connection. The caller should Close() the connection to return the
+connection to the pool.
+</p>
+
+
+<h2 id="Regexp">type Regexp</h2>
+<p>
+Regexp represents a BSON regular expression.
+</p>
+
+<pre>type Regexp struct {
+ Pattern string
+ // The valid options are:
+ //	i	Case insensitive matching
+ //	l	Make \w, \W, etc. locale-dependent
+ //	m	Multiline matching
+ //	s	Dotall mode
+ //	u	Make \w, \W, etc. match Unicode
+ //	x	Verbose mode
+ // Options must be specified in alphabetical order.
+ Options string
+}</pre>
+
+
+
+
+
+<h2 id="RemoveOptions">type RemoveOptions</h2>
+
+<pre>type RemoveOptions struct {
+ // If set, the database will remove only the first matching document in the
+ // collection. Otherwise all matching documents will be removed.
+ Single bool
+}</pre>
+
+
+
+
+
+<h2 id="SafeConn">type SafeConn</h2>
+<p>
+SafeConn wraps a connection with &#34;safe&#34; mode handling.
+</p>
+
+<pre>type SafeConn struct {
+ // The connecion to wrap.
+ Conn
+
+ // The command document used to fetch the last error. If cmd is nil, then
+ // the command {&#34;getLastError&#34;: 1} is used as the command.
+ Cmd interface{}
+}</pre>
+
+
+
+
+    <h3 id="SafeConn.Insert">func (SafeConn) Insert</h3>
+    <p><code>func (c SafeConn) Insert(namespace string, documents ...interface{}) os.Error</code></p>
+    
+    <h3 id="SafeConn.Remove">func (SafeConn) Remove</h3>
+    <p><code>func (c SafeConn) Remove(namespace string, selector interface{}, options *RemoveOptions) os.Error</code></p>
+    
+    <h3 id="SafeConn.Update">func (SafeConn) Update</h3>
+    <p><code>func (c SafeConn) Update(namespace string, selector, update interface{}, options *UpdateOptions) os.Error</code></p>
+    
+
+<h2 id="Symbol">type Symbol</h2>
+<p>
+Symbol represents a BSON symbol.
+</p>
+
+<pre>type Symbol string</pre>
+
+
+
+
+
+<h2 id="Timestamp">type Timestamp</h2>
+<p>
+Timestamp represents a BSON timesamp.
+</p>
+
+<pre>type Timestamp int64</pre>
+
+
+
+
+
+<h2 id="UpdateOptions">type UpdateOptions</h2>
+
+<pre>type UpdateOptions struct {
+ // If set, the database will insert the supplied object into the collection
+ // if no matching document is found.
+ Upsert bool
+
+ // If set, the database will update all objects matching the query.
+ Multi bool
+}</pre>
+
+
+
+
+
+<hr>
+This page was generated automatically from the source code. If you installed
+Go-Mongo using <a href="http://golang.org/cmd/goinstall/">goinstall</a>, then
+you can also view the source documentation with <a
+href="http://golang.org/cmd/godoc/">godoc</a>.  
+</div>
+</body>
+</html>
