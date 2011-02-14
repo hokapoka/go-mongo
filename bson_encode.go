@@ -231,8 +231,18 @@ func encodeRegexp(e *encodeState, name string, value reflect.Value) {
 }
 
 func encodeObjectId(e *encodeState, name string, value reflect.Value) {
-	e.writeKindName(kindObjectId, name)
 	oid := value.Interface().(ObjectId)
+	skip := true
+	for i := 0; i < len(oid); i++ {
+		if oid[i] != 0 {
+			skip = false
+			break
+		}
+	}
+	if skip {
+		return
+	}
+	e.writeKindName(kindObjectId, name)
 	e.Write(oid[:])
 }
 
