@@ -143,11 +143,8 @@ func (e *encodeState) writeKindName(kind int, name string) {
 
 func (e *encodeState) writeStruct(v *reflect.StructValue) {
 	offset := e.beginDoc()
-	t := v.Type().(*reflect.StructType)
-	for i := 0; i < v.NumField(); i++ {
-		if name := fieldName(t.Field(i)); name != "" {
-			e.encodeValue(name, v.Field(i))
-		}
+	for name, f := range compileStruct(v.Type().(*reflect.StructType)) {
+		e.encodeValue(name, v.FieldByIndex(f.Index))
 	}
 	e.WriteByte(0)
 	e.endDoc(offset)

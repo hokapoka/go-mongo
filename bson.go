@@ -16,7 +16,6 @@ package mongo
 
 import (
 	"reflect"
-	"strings"
 	"strconv"
 	"sync"
 	"crypto/rand"
@@ -170,12 +169,19 @@ func kindName(kind int) string {
 	return name
 }
 
-func fieldName(f reflect.StructField) string {
-	if f.Tag != "" {
-		return f.Tag
+func compileStruct(t *reflect.StructType) map[string]reflect.StructField {
+	m := make(map[string]reflect.StructField)
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		if f.PkgPath != "" {
+			// ignore if not exported
+			continue
+		}
+		name := f.Name
+		if f.Tag != "" {
+			name = f.Tag
+		}
+		m[name] = f
 	}
-	if f.PkgPath == "" {
-		return strings.ToLower(f.Name)
-	}
-	return ""
+	return m
 }

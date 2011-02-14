@@ -27,71 +27,71 @@ func testMap(value interface{}) map[string]interface{} {
 type stEmpty struct{}
 
 type stFloat64 struct {
-	Test float64
+	Test float64 "test"
 }
 
 type stString struct {
-	Test string
+	Test string "test"
 }
 
 type stDoc struct {
-	Test map[string]interface{}
+	Test map[string]interface{} "test"
 }
 
 type stBinary struct {
-	Test []byte
+	Test []byte "test"
 }
 
 type stObjectId struct {
-	Test ObjectId
+	Test ObjectId "test"
 }
 
 type stBool struct {
-	Test bool
+	Test bool "test"
 }
 
 type stRegexp struct {
-	Test Regexp
+	Test Regexp "test"
 }
 
 type stSymbol struct {
-	Test Symbol
+	Test Symbol "test"
 }
 
 type stInt32 struct {
-	Test int32
+	Test int32 "test"
 }
 
 type stInt64 struct {
-	Test int64
+	Test int64 "test"
 }
 
 type stDateTime struct {
-	Test DateTime
+	Test DateTime "test"
 }
 
 type stTimestamp struct {
-	Test Timestamp
+	Test Timestamp "test"
 }
 
 type stMinMax struct {
-	Test MinMax
+	Test MinMax "test"
 }
 
 type stCodeWithScope struct {
-	Test CodeWithScope
+	Test CodeWithScope "test"
 }
 
 type stAny struct {
-	Test interface{}
+	Test interface{} "test"
 }
 
 type stStringSlice struct {
-	Test []string
+	Test []string "test"
 }
 
 type stStringArray struct {
-	Test [1]string
+	Test [1]string "test"
 }
 
 var bsonTests = []struct {

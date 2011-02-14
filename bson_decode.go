@@ -120,17 +120,6 @@ func (d *decodeState) saveErrorAndSkip(kind int, t reflect.Type) {
 	}
 }
 
-func (d *decodeState) compileStruct(t *reflect.StructType) map[string]reflect.StructField {
-	m := make(map[string]reflect.StructField)
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		if name := fieldName(f); name != "" {
-			m[name] = f
-		}
-	}
-	return m
-}
-
 func (d *decodeState) beginDoc() int {
 	offset := d.offset
 	offset += int(wire.Uint32(d.scanSlice(4)))
@@ -479,7 +468,7 @@ func decodeArray(d *decodeState, kind int, value reflect.Value) {
 func decodeStruct(d *decodeState, kind int, value reflect.Value) {
 	v := value.(*reflect.StructValue)
 	t := v.Type().(*reflect.StructType)
-	m := d.compileStruct(t)
+	m := compileStruct(t)
 	offset := d.beginDoc()
 	for {
 		kind, name := d.scanKindName()
