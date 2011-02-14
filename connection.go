@@ -140,6 +140,9 @@ func (c *connection) Update(namespace string, document, selector interface{}, op
 }
 
 func (c *connection) Insert(namespace string, documents ...interface{}) (err os.Error) {
+	if len(documents) == 0 {
+		return os.NewError("mongo: insert with no documents")
+	}
 	b := Buffer(make([]byte, 0, 512))
 	b.Next(4)                 // placeholder for message length
 	b.WriteUint32(c.nextId()) // requestId
