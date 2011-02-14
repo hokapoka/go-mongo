@@ -34,7 +34,7 @@ const (
 )
 
 type connection struct {
-	conn      *net.TCPConn
+	conn      net.Conn
 	addr      string
 	requestId uint32
 	cursors   map[uint32]*cursor
@@ -61,7 +61,7 @@ func (c *connection) connect() os.Error {
 	if c.conn != nil {
 		c.conn.Close()
 	}
-	c.conn = conn.(*net.TCPConn)
+	c.conn = conn
 	return nil
 }
 
@@ -268,12 +268,13 @@ func (c *connection) getMore(r *cursor) os.Error {
 }
 
 func (c *connection) killCursors(cursorIds ...uint64) os.Error {
-	b := Buffer(make([]byte, 5*4*len(cursorIds)*8))
-	b.Next(4)                 // placeholder for message length
-	b.WriteUint32(c.nextId()) // requestId
-	b.WriteUint32(0)          // responseTo
-	b.WriteUint32(2007)       // opCode
-	b.WriteUint32(0)          // reserved
+	b := Buffer(make([]byte, 0, 6*4+len(cursorIds)*8))
+	b.Next(4)                             // placeholder for message length
+	b.WriteUint32(c.nextId())             // requestId
+	b.WriteUint32(0)                      // responseTo
+	b.WriteUint32(2007)                   // opCode
+	b.WriteUint32(0)                      // zero
+	b.WriteUint32(uint32(len(cursorIds))) // number of cursor ids.
 	for _, cursorId := range cursorIds {
 		b.WriteUint64(cursorId)
 	}
