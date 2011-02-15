@@ -20,15 +20,6 @@
 <li><a href="#SafeInsert">func SafeInsert</a>
 <li><a href="#SafeRemove">func SafeRemove</a>
 <li><a href="#SafeUpdate">func SafeUpdate</a>
-<li><a href="#Buffer">type Buffer</a>
-            <ul>
-    <li><a href="#Buffer.Next">func (*Buffer) Next</a>
-    <li><a href="#Buffer.Write">func (*Buffer) Write</a>
-    <li><a href="#Buffer.WriteByte">func (*Buffer) WriteByte</a>
-    <li><a href="#Buffer.WriteString">func (*Buffer) WriteString</a>
-    <li><a href="#Buffer.WriteUint32">func (*Buffer) WriteUint32</a>
-    <li><a href="#Buffer.WriteUint64">func (*Buffer) WriteUint64</a>
-            </ul>
 <li><a href="#Code">type Code</a>
 <li><a href="#CodeWithScope">type CodeWithScope</a>
 <li><a href="#Conn">type Conn</a>
@@ -58,6 +49,7 @@
         </ul>
 <li><a href="#Pool">type Pool</a>
         <ul>
+    <li><a href="#NewDialPool">func NewDialPool</a>
     <li><a href="#NewPool">func NewPool</a>
     <li><a href="#Pool.Get">func (*Pool) Get</a>
         </ul>
@@ -82,16 +74,10 @@
 The mongo package is a driver for MongoDB.
 </p>
 <p>
-This driver uses a namespace string to specify the database and collection
-for all operations. The namespace string is in the format
+Go-Mongo uses a namespace string to specify the database and collection for
+all operations. The namespace string is in the format
 &#34;&lt;database&gt;.&lt;collection&gt;&#34; where &lt;database&gt; is the name of the database and
-&lt;collection&gt; is the name of the collection. Most other MongoDB drivers use
-database and collection objects to specify the database and collection.
-</p>
-<p>
-This driver does not provide command helpers. See
-<a href="http://www.snailinaturtleneck.com/blog/2011/01/25/why-command-helpers-suck/">http://www.snailinaturtleneck.com/blog/2011/01/25/why-command-helpers-suck/</a>
-for some thoughts on command helpers.
+&lt;collection&gt; is the name of the collection.
 </p>
 
 
@@ -215,7 +201,7 @@ FindOne returns a single result for a query.
 GetLastError returns the last error for a database. The database is
 specified by the database component of namespace. The command cmd is used to
 fetch the last error. If cmd is nil, then the command {&#34;getLasetError&#34;: 1}
-is used to get the error.  If the err argument is not nil, then err is
+is used to get the error. If the err argument is not nil, then err is
 returned directly from the function.
 </p>
 
@@ -229,51 +215,21 @@ database component of namespace.
 <h2 id="SafeInsert">func SafeInsert</h2>
 <p><code>func SafeInsert(conn Conn, namespace string, errorCmd interface{}, documents ...interface{}) os.Error</code></p>
 <p>
-SafeInsert returns the last error from the database after calling conn-&gt;Insert().
+SafeInsert returns the last error from the database after calling conn.Insert().
 </p>
 
 <h2 id="SafeRemove">func SafeRemove</h2>
 <p><code>func SafeRemove(conn Conn, namespace string, errorCmd, selector interface{}, options *RemoveOptions) os.Error</code></p>
 <p>
-SafeRemove returns the last error from the database after calling conn-&gt;Remove().
+SafeRemove returns the last error from the database after calling conn.Remove().
 </p>
 
 <h2 id="SafeUpdate">func SafeUpdate</h2>
 <p><code>func SafeUpdate(conn Conn, namespace string, errorCmd, selector, update interface{}, options *UpdateOptions) os.Error</code></p>
 <p>
-SafeUpdate returns the last error from the database after calling conn-&gt;Update().
+SafeUpdate returns the last error from the database after calling conn.Update().
 </p>
 
-
-<h2 id="Buffer">type Buffer</h2>
-<p>
-Buffer wraps a byte slice with convenience methods for writing BSON
-encodings and MongoDB messages.
-</p>
-
-<pre>type Buffer []byte</pre>
-
-
-
-
-    <h3 id="Buffer.Next">func (*Buffer) Next</h3>
-    <p><code>func (b *Buffer) Next(n int) []byte</code></p>
-    
-    <h3 id="Buffer.Write">func (*Buffer) Write</h3>
-    <p><code>func (b *Buffer) Write(p []byte)</code></p>
-    
-    <h3 id="Buffer.WriteByte">func (*Buffer) WriteByte</h3>
-    <p><code>func (b *Buffer) WriteByte(n byte)</code></p>
-    
-    <h3 id="Buffer.WriteString">func (*Buffer) WriteString</h3>
-    <p><code>func (b *Buffer) WriteString(s string)</code></p>
-    
-    <h3 id="Buffer.WriteUint32">func (*Buffer) WriteUint32</h3>
-    <p><code>func (b *Buffer) WriteUint32(n uint32)</code></p>
-    
-    <h3 id="Buffer.WriteUint64">func (*Buffer) WriteUint64</h3>
-    <p><code>func (b *Buffer) WriteUint64(n uint64)</code></p>
-    
 
 <h2 id="Code">type Code</h2>
 <p>
@@ -303,6 +259,11 @@ CodeWithScope represents javascript in BSON.
 <h2 id="Conn">type Conn</h2>
 <p>
 A Conn represents a connection to a MongoDB server.
+</p>
+<p>
+When the application is done using the connection, the application must call
+the connection Close() method to release the resources used by the
+connection.
 </p>
 
 <pre>type Conn interface {
@@ -336,15 +297,46 @@ Dial connects to server at addr.
 
 
 <h2 id="Cursor">type Cursor</h2>
+<p>
+Cursor iterates over the results from a Find operation.
+</p>
+<p>
+When the application is done using a cursor, the application must call the
+cursor Close() method to release the resources used by the cursor.
+</p>
+<p>
+An example use of a cursor is:
+</p>
+<pre> cursor, err := c.Find(&#34;db.coll&#34;, mongo.Doc{}, nil)
+ if err != nil {
+     return err
+ }
+ defer cursor.Close()
+
+ for cursor.HasNext() {
+     var m map[string]interface{}
+     err = r.Next(&amp;m)
+     if err != nil {
+         return err
+     }
+     // Do something with result document m.
+	}
+</pre>
+<p>
+Tailable cursors are supported. When working with a tailable cursor, use the
+expression cursor.Error() != nil to determine if the cursor is &#34;dead.&#34; See
+<a href="http://www.mongodb.org/display/DOCS/Tailable+Cursors">http://www.mongodb.org/display/DOCS/Tailable+Cursors</a> for more discussion on
+tailable cursors.
+</p>
 
 <pre>type Cursor interface {
  // Close releases the resources used by this connection. 
  Close() os.Error
 
- // Error returns non-nil if the cursor has a permanent error.
+ // Error returns non-nil if the cursor has a permanent error. 
  Error() os.Error
 
- // HasNext returns true if there are more documents in the cursor.
+ // HasNext returns true if there are more documents to retrieve.
  HasNext() bool
 
  // Next fetches the next document from the cursor.
@@ -432,6 +424,9 @@ EncodeTypeError is the error indicating that Encode could not encode an input ty
     
 
 <h2 id="FindOptions">type FindOptions</h2>
+<p>
+FindOptions specifies options for the Conn.Find method.
+</p>
 
 <pre>type FindOptions struct {
  // Optional document that limits the fields in the returned documents.
@@ -504,7 +499,8 @@ MinMax represents either a minimum or maxium BSON value.
 
 <h2 id="ObjectId">type ObjectId</h2>
 <p>
-ObjectId represents a BSON object identifier.
+ObjectId represents a BSON object identifier. If all bytes in the object id
+are zero, then the object id is not encoded to BSON.
 </p>
 
 <pre>type ObjectId [12]byte</pre>
@@ -514,11 +510,11 @@ ObjectId represents a BSON object identifier.
     <h3 id="NewObjectId">func NewObjectId</h3>
     <p><code>func NewObjectId() ObjectId</code></p>
     <p>
-NewObjectId returns a new object id.  This funtion uses the following format
+NewObjectId returns a new object id. This funtion uses the following format
 for object ids:
 </p>
-<pre>[0:4] Time since epoch in seconds. This is compatible
-      with other drivers.
+<pre>[0:4]   Time since epoch in seconds. This is compatible
+        with other drivers.
 
 [4:12] Incrementing counter intialized with crypto random
        number. This ensures that object ids are unique, but
@@ -536,9 +532,7 @@ The following example shows how to use a pool in a web application. The
 application creates a pool at application startup and makes it available to
 request handlers, possibly using a global variable:
 </p>
-<pre>pool = mongo.NewPool(
-  func() (mongo.Conn, os.Error) { return mongo.Dial(&#34;localhost&#34;) },
-  2)
+<pre>pool = mongo.NewDialPool(&#34;localhost&#34;, 2)
 </pre>
 <p>
 This pool uses a simple database connection and a maximum of two idle
@@ -566,6 +560,13 @@ the resources used by the connection.
 }</pre>
 
 
+
+    <h3 id="NewDialPool">func NewDialPool</h3>
+    <p><code>func NewDialPool(addr string, maxIdle int) *Pool</code></p>
+    <p>
+NewDialPool returns a new connetion pool. The pool uses mongo.Dial to
+create new connections and maintains a maximum of maxIdle connetions.
+</p>
 
     <h3 id="NewPool">func NewPool</h3>
     <p><code>func NewPool(newFn func() (Conn, os.Error), maxIdle int) *Pool</code></p>
@@ -607,6 +608,9 @@ Regexp represents a BSON regular expression.
 
 
 <h2 id="RemoveOptions">type RemoveOptions</h2>
+<p>
+RemoveOptions specifies options for the Conn.Remove method.
+</p>
 
 <pre>type RemoveOptions struct {
  // If set, the database will remove only the first matching document in the
@@ -620,7 +624,9 @@ Regexp represents a BSON regular expression.
 
 <h2 id="SafeConn">type SafeConn</h2>
 <p>
-SafeConn wraps a connection with &#34;safe&#34; mode handling.
+SafeConn wraps a connection with safe mode handling. The wrapper fetches the
+last error from the server after each call to a mutating operation (insert,
+update, remove) and returns the error if any as an os.Error.
 </p>
 
 <pre>type SafeConn struct {
@@ -668,6 +674,9 @@ Timestamp represents a BSON timesamp.
 
 
 <h2 id="UpdateOptions">type UpdateOptions</h2>
+<p>
+UpdateOptions specifies options for the Conn.Update method.
+</p>
 
 <pre>type UpdateOptions struct {
  // If set, the database will insert the supplied object into the collection
