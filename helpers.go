@@ -52,7 +52,7 @@ var getLastErrorCmd = Doc{{"getLastError", 1}}
 // GetLastError returns the last error for a database. The database is
 // specified by the database component of namespace. The command cmd is used to
 // fetch the last error. If cmd is nil, then the command {"getLasetError": 1}
-// is used to get the error.  If the err argument is not nil, then err is
+// is used to get the error. If the err argument is not nil, then err is
 // returned directly from the function.
 func GetLastError(conn Conn, namespace string, cmd interface{}, err os.Error) os.Error {
 	if err != nil {
@@ -71,22 +71,24 @@ func GetLastError(conn Conn, namespace string, cmd interface{}, err os.Error) os
 	return nil
 }
 
-// SafeInsert returns the last error from the database after calling conn->Insert().
+// SafeInsert returns the last error from the database after calling conn.Insert().
 func SafeInsert(conn Conn, namespace string, errorCmd interface{}, documents ...interface{}) os.Error {
 	return GetLastError(conn, namespace, errorCmd, conn.Insert(namespace, documents...))
 }
 
-// SafeUpdate returns the last error from the database after calling conn->Update().
+// SafeUpdate returns the last error from the database after calling conn.Update().
 func SafeUpdate(conn Conn, namespace string, errorCmd, selector, update interface{}, options *UpdateOptions) os.Error {
 	return GetLastError(conn, namespace, errorCmd, conn.Update(namespace, selector, update, options))
 }
 
-// SafeRemove returns the last error from the database after calling conn->Remove().
+// SafeRemove returns the last error from the database after calling conn.Remove().
 func SafeRemove(conn Conn, namespace string, errorCmd, selector interface{}, options *RemoveOptions) os.Error {
 	return GetLastError(conn, namespace, errorCmd, conn.Remove(namespace, selector, options))
 }
 
-// SafeConn wraps a connection with "safe" mode handling.
+// SafeConn wraps a connection with safe mode handling. The wrapper fetches the
+// last error from the server after each call to a mutating operation (insert,
+// update, delete) and returns the error if any as an os.Error.
 type SafeConn struct {
 	// The connecion to wrap.
 	Conn

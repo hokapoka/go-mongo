@@ -49,14 +49,15 @@ type Regexp struct {
 	Options string
 }
 
-// ObjectId represents a BSON object identifier.
+// ObjectId represents a BSON object identifier. If all bytes in the object id
+// are zero, then the object id is not encoded to BSON.
 type ObjectId [12]byte
 
-// NewObjectId returns a new object id.  This funtion uses the following format
+// NewObjectId returns a new object id. This funtion uses the following format
 // for object ids:
 //
-//  [0:4] Time since epoch in seconds. This is compatible 
-//        with other drivers.
+//  [0:4]   Time since epoch in seconds. This is compatible 
+//          with other drivers.
 // 
 //  [4:12] Incrementing counter intialized with crypto random
 //         number. This ensures that object ids are unique, but
