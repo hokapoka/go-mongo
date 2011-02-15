@@ -24,9 +24,7 @@ import (
 // application creates a pool at application startup and makes it available to
 // request handlers, possibly using a global variable:
 //
-//  pool = mongo.NewPool(
-//    func() (mongo.Conn, os.Error) { return mongo.Dial("localhost") }, 
-//    2)
+//  pool = mongo.NewDialPool("localhost", 2)
 //
 // This pool uses a simple database connection and a maximum of two idle
 // connections.
@@ -52,6 +50,12 @@ type Pool struct {
 type pooledConnection struct {
 	Conn
 	pool *Pool
+}
+
+// NewDialPool returns a new connetion pool. The pool uses mongo.Dial to
+// create new connections and maintains a maximum of maxIdle connetions.
+func NewDialPool(addr string, maxIdle int) *Pool {
+	return NewPool(func() (Conn, os.Error) { return Dial(addr) }, maxIdle)
 }
 
 // NewPool returns a new connection pool. The pool uses newFn to create

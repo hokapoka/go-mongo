@@ -147,10 +147,10 @@ type Cursor interface {
 	// Close releases the resources used by this connection. 
 	Close() os.Error
 
-    // Error returns non-nil if the cursor has a permanent error. 
-    Error() os.Error
+	// Error returns non-nil if the cursor has a permanent error. 
+	Error() os.Error
 
-    // HasNext returns true if there are more documents to retrieve.
+	// HasNext returns true if there are more documents to retrieve.
 	HasNext() bool
 
 	// Next fetches the next document from the cursor.
