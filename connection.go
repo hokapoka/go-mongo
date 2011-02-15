@@ -119,7 +119,7 @@ func (c *connection) Update(namespace string, document, selector interface{}, op
 		}
 	}
 
-	b := Buffer(make([]byte, 0, 512))
+	b := buffer(make([]byte, 0, 512))
 	b.Next(4)                    // placeholder for message length
 	b.WriteUint32(c.nextId())    // requestId
 	b.WriteUint32(0)             // responseTo
@@ -143,7 +143,7 @@ func (c *connection) Insert(namespace string, documents ...interface{}) (err os.
 	if len(documents) == 0 {
 		return os.NewError("mongo: insert with no documents")
 	}
-	b := Buffer(make([]byte, 0, 512))
+	b := buffer(make([]byte, 0, 512))
 	b.Next(4)                 // placeholder for message length
 	b.WriteUint32(c.nextId()) // requestId
 	b.WriteUint32(0)          // responseTo
@@ -168,7 +168,7 @@ func (c *connection) Remove(namespace string, selector interface{}, options *Rem
 			flags |= removeSingle
 		}
 	}
-	b := Buffer(make([]byte, 0, 512))
+	b := buffer(make([]byte, 0, 512))
 	b.Next(4)                    // placeholder for message length
 	b.WriteUint32(c.nextId())    // requestId
 	b.WriteUint32(0)             // responseTo
@@ -222,7 +222,7 @@ func (c *connection) Find(namespace string, query interface{}, options *FindOpti
 		}
 	}
 
-	b := Buffer(make([]byte, 0, 512))
+	b := buffer(make([]byte, 0, 512))
 	b.Next(4)                         // placeholder for message length
 	b.WriteUint32(r.requestId)        // requestId
 	b.WriteUint32(0)                  // responseTo
@@ -253,7 +253,7 @@ func (c *connection) Find(namespace string, query interface{}, options *FindOpti
 
 func (c *connection) getMore(r *cursor) os.Error {
 	r.requestId = c.nextId()
-	b := Buffer(make([]byte, 0, 5*4+len(r.namespace)+1+4+8))
+	b := buffer(make([]byte, 0, 5*4+len(r.namespace)+1+4+8))
 	b.Next(4)                  // placeholder for message length
 	b.WriteUint32(r.requestId) // requestId
 	b.WriteUint32(0)           // responseTo
@@ -271,7 +271,7 @@ func (c *connection) getMore(r *cursor) os.Error {
 }
 
 func (c *connection) killCursors(cursorIds ...uint64) os.Error {
-	b := Buffer(make([]byte, 0, 6*4+len(cursorIds)*8))
+	b := buffer(make([]byte, 0, 6*4+len(cursorIds)*8))
 	b.Next(4)                             // placeholder for message length
 	b.WriteUint32(c.nextId())             // requestId
 	b.WriteUint32(0)                      // responseTo

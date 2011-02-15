@@ -41,7 +41,7 @@ type interfaceOrPtrValue interface {
 }
 
 type encodeState struct {
-	Buffer
+	buffer
 }
 
 // Encode appends the BSON encoding of doc to buf and returns the new slice.
@@ -104,7 +104,7 @@ func Encode(buf []byte, doc interface{}) (result []byte, err os.Error) {
 		v = pv.Elem()
 	}
 
-	e := encodeState{Buffer: buf}
+	e := encodeState{buffer: buf}
 	switch v := v.(type) {
 	case *reflect.StructValue:
 		e.writeStruct(v)
@@ -117,7 +117,7 @@ func Encode(buf []byte, doc interface{}) (result []byte, err os.Error) {
 			return nil, &EncodeTypeError{v.Type()}
 		}
 	}
-	return e.Buffer, nil
+	return e.buffer, nil
 }
 
 func (e *encodeState) abort(err os.Error) {
@@ -125,14 +125,14 @@ func (e *encodeState) abort(err os.Error) {
 }
 
 func (e *encodeState) beginDoc() (offset int) {
-	offset = len(e.Buffer)
-	e.Buffer.Next(4)
+	offset = len(e.buffer)
+	e.buffer.Next(4)
 	return
 }
 
 func (e *encodeState) endDoc(offset int) {
-	n := len(e.Buffer) - offset
-	wire.PutUint32(e.Buffer[offset:offset+4], uint32(n))
+	n := len(e.buffer) - offset
+	wire.PutUint32(e.buffer[offset:offset+4], uint32(n))
 }
 
 func (e *encodeState) writeKindName(kind int, name string) {

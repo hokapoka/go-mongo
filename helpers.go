@@ -88,7 +88,7 @@ func SafeRemove(conn Conn, namespace string, errorCmd, selector interface{}, opt
 
 // SafeConn wraps a connection with safe mode handling. The wrapper fetches the
 // last error from the server after each call to a mutating operation (insert,
-// update, delete) and returns the error if any as an os.Error.
+// update, remove) and returns the error if any as an os.Error.
 type SafeConn struct {
 	// The connecion to wrap.
 	Conn
