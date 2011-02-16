@@ -23,7 +23,7 @@ func dialAndDrop(t *testing.T, db string) Conn {
 	if err != nil {
 		t.Fatal("dial", err)
 	}
-	err = RunCommand(c, db, Doc{{"dropDatabase", 1}}, nil)
+	_, err = RunCommand(c, db, "dropDatabase")
 	if err != nil {
 		c.Close()
 		t.Fatal("drop", err)
@@ -103,11 +103,10 @@ func TestTailableCursor(t *testing.T) {
 	c := dialAndDrop(t, "go-mongo-test")
 	defer c.Close()
 
-	err := RunCommand(c, "go-mongo-test",
+	_, err := RunCommand(c, "go-mongo-test",
 		Doc{{"create", "capped"},
 			{"capped", true},
-			{"size", 1000.0}},
-		nil)
+			{"size", 1000.0}})
 	if err != nil {
 		t.Fatal("create capped", err)
 	}

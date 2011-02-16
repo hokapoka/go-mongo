@@ -24,6 +24,5 @@ GOFILES=\
     connection.go\
     pool.go\
     helpers.go\
-
  
 include $(GOROOT)/src/Make.pkg

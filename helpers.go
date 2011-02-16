@@ -34,56 +34,73 @@ func FindOne(conn Conn, namespace string, query interface{}, options *FindOption
 	return cursor.Next(result)
 }
 
-// RunCommand executes the command cmd on the database specified by the
-// database component of namespace.
-func RunCommand(conn Conn, namespace string, cmd, result interface{}) os.Error {
-	if result == nil {
-		result = &map[string]interface{}{}
+// CommandNamespace returns the command namespace name.$cmd given a database
+// name or a collection namespace.
+func CommandNamespace(nameOrNamespace string) string {
+	s := nameOrNamespace
+	if i := strings.Index(nameOrNamespace, "."); i > 0 {
+		s = nameOrNamespace[:i]
 	}
-	db := namespace
-	if i := strings.Index(namespace, "."); i > 0 {
-		db = namespace[:i]
-	}
-	return FindOne(conn, db+".$cmd", cmd, nil, result)
+	return s + ".$cmd"
 }
 
-var getLastErrorCmd = Doc{{"getLastError", 1}}
+// RunCommand executes the command cmd on the database specified by the
+// database component of namespace. If cmd is a string, then the command {cmd:
+// 1} is sent to the database. 
+func RunCommand(conn Conn, namespace string, cmd interface{}) (map[string]interface{}, os.Error) {
+	if s, ok := cmd.(string); ok {
+		cmd = Doc{{s, 1}}
+	}
+	result := map[string]interface{}{}
+	if err := FindOne(conn, CommandNamespace(namespace), cmd, nil, &result); err != nil {
+		return nil, err
+	}
+	if errmsg, ok := result["errmsg"].(string); ok {
+		return result, os.NewError(errmsg)
+	}
+	return result, nil
+}
 
 // GetLastError returns the last error for a database. The database is
 // specified by the database component of namespace. The command cmd is used to
 // fetch the last error. If cmd is nil, then the command {"getLasetError": 1}
-// is used to get the error. If the err argument is not nil, then err is
-// returned directly from the function.
-func GetLastError(conn Conn, namespace string, cmd interface{}, err os.Error) os.Error {
+// is used to get the error. 
+func GetLastError(conn Conn, namespace string, cmd interface{}) os.Error {
+	if cmd == nil {
+		cmd = "getLastError"
+	}
+	result, err := RunCommand(conn, namespace, cmd)
 	if err != nil {
 		return err
 	}
-	if cmd == nil {
-		cmd = getLastErrorCmd
-	}
-	var r map[string]interface{}
-	if err := RunCommand(conn, namespace, cmd, &r); err != nil {
-		return err
-	}
-	if e := r["err"]; e != nil {
-		return os.NewError(e.(string))
+	if s, ok := result["err"].(string); ok && s != "" {
+		return os.NewError(s)
 	}
 	return nil
 }
 
 // SafeInsert returns the last error from the database after calling conn.Insert().
 func SafeInsert(conn Conn, namespace string, errorCmd interface{}, documents ...interface{}) os.Error {
-	return GetLastError(conn, namespace, errorCmd, conn.Insert(namespace, documents...))
+	if err := conn.Insert(namespace, documents...); err != nil {
+		return err
+	}
+	return GetLastError(conn, namespace, errorCmd)
 }
 
 // SafeUpdate returns the last error from the database after calling conn.Update().
 func SafeUpdate(conn Conn, namespace string, errorCmd, selector, update interface{}, options *UpdateOptions) os.Error {
-	return GetLastError(conn, namespace, errorCmd, conn.Update(namespace, selector, update, options))
+	if err := conn.Update(namespace, selector, update, options); err != nil {
+		return err
+	}
+	return GetLastError(conn, namespace, errorCmd)
 }
 
 // SafeRemove returns the last error from the database after calling conn.Remove().
 func SafeRemove(conn Conn, namespace string, errorCmd, selector interface{}, options *RemoveOptions) os.Error {
-	return GetLastError(conn, namespace, errorCmd, conn.Remove(namespace, selector, options))
+	if err := conn.Remove(namespace, selector, options); err != nil {
+		return err
+	}
+	return GetLastError(conn, namespace, errorCmd)
 }
 
 // SafeConn wraps a connection with safe mode handling. The wrapper fetches the
@@ -99,13 +116,13 @@ type SafeConn struct {
 }
 
 func (c SafeConn) Update(namespace string, selector, update interface{}, options *UpdateOptions) os.Error {
-	return GetLastError(c.Conn, namespace, c.Cmd, c.Conn.Update(namespace, selector, update, options))
+	return SafeUpdate(c.Conn, namespace, c.Cmd, selector, update, options)
 }
 
 func (c SafeConn) Insert(namespace string, documents ...interface{}) os.Error {
-	return GetLastError(c.Conn, namespace, c.Cmd, c.Conn.Insert(namespace, documents...))
+	return SafeInsert(c.Conn, namespace, c.Cmd, documents...)
 }
 
 func (c SafeConn) Remove(namespace string, selector interface{}, options *RemoveOptions) os.Error {
-	return GetLastError(c.Conn, namespace, c.Cmd, c.Conn.Remove(namespace, selector, options))
+	return SafeRemove(c.Conn, namespace, c.Cmd, selector, options)
 }

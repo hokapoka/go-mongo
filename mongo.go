@@ -13,11 +13,6 @@
 // under the License.
 
 // The mongo package is a driver for MongoDB. 
-//
-// Go-Mongo uses a namespace string to specify the database and collection for
-// all operations. The namespace string is in the format
-// "<database>.<collection>" where <database> is the name of the database and
-// <collection> is the name of the collection. 
 package mongo
 
 import (
@@ -97,6 +92,11 @@ type FindOptions struct {
 // When the application is done using the connection, the application must call
 // the connection Close() method to release the resources used by the
 // connection. 
+//
+// The methods in this interface use a namespace string to specify the database
+// and collection. A namespace string has the format "<database>.<collection>"
+// where <database> is the name of the database and <collection> is the name of
+// the collection. 
 type Conn interface {
 	// Close releases the resources used by this connection.
 	Close() os.Error
