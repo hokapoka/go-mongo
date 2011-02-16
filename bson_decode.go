@@ -318,6 +318,14 @@ func decodeObjectId(d *decodeState, kind int, value reflect.Value) {
 	reflect.Copy(value.(reflect.ArrayOrSliceValue), reflect.NewValue(p).(reflect.ArrayOrSliceValue))
 }
 
+func decodeRawData(d *decodeState, kind int, value reflect.Value) {
+	start := d.offset
+	d.skipValue(kind)
+	rd := RawData{Kind: kind, Data: make([]byte, d.offset-start)}
+	copy(rd.Data, d.data[start:d.offset])
+	value.SetValue(reflect.NewValue(rd))
+}
+
 func decodeByteSlice(d *decodeState, kind int, value reflect.Value) {
 	var p []byte
 	switch kind {
@@ -602,12 +610,13 @@ func init() {
 		reflect.Array:     decodeArray,
 	}
 	typeDecoder = map[reflect.Type]decoderFunc{
-		reflect.Typeof([]byte{}):                     decodeByteSlice,
 		reflect.Typeof(DateTime(0)):                  decodeDateTime,
 		reflect.Typeof(MinMax(0)):                    decodeMinMax,
-		reflect.Typeof(make(map[string]interface{})): decodeMapStringInterface,
 		reflect.Typeof(ObjectId{}):                   decodeObjectId,
+		reflect.Typeof(RawData{}):                    decodeRawData,
 		reflect.Typeof(Symbol("")):                   decodeString,
 		reflect.Typeof(Timestamp(0)):                 decodeTimestamp,
+		reflect.Typeof([]byte{}):                     decodeByteSlice,
+		reflect.Typeof(make(map[string]interface{})): decodeMapStringInterface,
 	}
 }

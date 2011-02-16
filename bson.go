@@ -97,6 +97,12 @@ func nextOidCounter() uint64 {
 	return oidCounter
 }
 
+// RawData represents a chunk of uninterpreted BSON data.
+type RawData struct {
+	Kind int
+	Data []byte
+}
+
 // Symbol represents a BSON symbol.
 type Symbol string
 

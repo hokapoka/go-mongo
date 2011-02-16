@@ -23,6 +23,7 @@ GOFILES=\
     mongo.go\
     connection.go\
     pool.go\
+    log.go\
     helpers.go\
  
 include $(GOROOT)/src/Make.pkg

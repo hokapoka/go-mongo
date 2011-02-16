@@ -23,7 +23,8 @@ import (
 )
 
 var (
-	typeDoc = reflect.Typeof(Doc{})
+	typeDoc     = reflect.Typeof(Doc{})
+	typeRawData = reflect.Typeof(RawData{})
 )
 
 // EncodeTypeError is the error indicating that Encode could not encode an input type.
@@ -105,15 +106,22 @@ func Encode(buf []byte, doc interface{}) (result []byte, err os.Error) {
 	}
 
 	e := encodeState{buffer: buf}
-	switch v := v.(type) {
-	case *reflect.StructValue:
-		e.writeStruct(v)
-	case *reflect.MapValue:
-		e.writeMap(v)
-	default:
-		if v.Type() == typeDoc {
-			e.writeDoc(v.Interface().(Doc))
-		} else {
+    switch v.Type() {
+    case typeDoc:
+        e.writeDoc(v.Interface().(Doc))
+    case typeRawData:
+        rd := v.Interface().(RawData)
+        if rd.Kind != kindDocument {
+            return nil, &EncodeTypeError{v.Type()}
+        }
+        e.Write(rd.Data)
+    default:
+        switch v := v.(type) {
+        case *reflect.StructValue:
+            e.writeStruct(v)
+        case *reflect.MapValue:
+            e.writeMap(v)
+	    default:
 			return nil, &EncodeTypeError{v.Type()}
 		}
 	}
@@ -246,6 +254,12 @@ func encodeObjectId(e *encodeState, name string, value reflect.Value) {
 	e.Write(oid[:])
 }
 
+func encodeRawData(e *encodeState, name string, value reflect.Value) {
+	rd := value.Interface().(RawData)
+	e.writeKindName(rd.Kind, name)
+	e.Write(rd.Data)
+}
+
 func encodeCodeWithScope(e *encodeState, name string, value reflect.Value) {
 	e.writeKindName(kindCodeWithScope, name)
 	c := value.Interface().(CodeWithScope)
@@ -344,6 +358,7 @@ func init() {
 	}
 	typeEncoder = map[reflect.Type]encoderFunc{
 		typeDoc:                         encodeDoc,
+		typeRawData:                     encodeRawData,
 		reflect.Typeof(Code("")):        func(e *encodeState, name string, value reflect.Value) { encodeString(e, kindCode, name, value) },
 		reflect.Typeof(CodeWithScope{}): encodeCodeWithScope,
 		reflect.Typeof(DateTime(0)):     func(e *encodeState, name string, value reflect.Value) { encodeInt64(e, kindDateTime, name, value) },
