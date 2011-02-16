@@ -12,14 +12,20 @@
 <ul>
 <li><a href="#package">Package</a>
 <li><a href="#variables">Variables</a>
+<li><a href="#Command">func Command</a>
+<li><a href="#CommandNamespace">func CommandNamespace</a>
 <li><a href="#Decode">func Decode</a>
+<li><a href="#Drop">func Drop</a>
 <li><a href="#Encode">func Encode</a>
+<li><a href="#Eval">func Eval</a>
 <li><a href="#FindOne">func FindOne</a>
 <li><a href="#GetLastError">func GetLastError</a>
+<li><a href="#Repair">func Repair</a>
 <li><a href="#RunCommand">func RunCommand</a>
 <li><a href="#SafeInsert">func SafeInsert</a>
 <li><a href="#SafeRemove">func SafeRemove</a>
 <li><a href="#SafeUpdate">func SafeUpdate</a>
+<li><a href="#Stats">func Stats</a>
 <li><a href="#Code">type Code</a>
 <li><a href="#CodeWithScope">type CodeWithScope</a>
 <li><a href="#Conn">type Conn</a>
@@ -28,6 +34,10 @@
         </ul>
 <li><a href="#Cursor">type Cursor</a>
 <li><a href="#DateTime">type DateTime</a>
+<li><a href="#Db">type Db</a>
+            <ul>
+    <li><a href="#Db.Collection">func (Db) Collection</a>
+            </ul>
 <li><a href="#DecodeConvertError">type DecodeConvertError</a>
             <ul>
     <li><a href="#DecodeConvertError.String">func (*DecodeConvertError) String</a>
@@ -73,12 +83,6 @@
 <p>
 The mongo package is a driver for MongoDB.
 </p>
-<p>
-Go-Mongo uses a namespace string to specify the database and collection for
-all operations. The namespace string is in the format
-&#34;&lt;database&gt;.&lt;collection&gt;&#34; where &lt;database&gt; is the name of the database and
-&lt;collection&gt; is the name of the collection.
-</p>
 
 
 
@@ -94,6 +98,26 @@ var (
 <pre>
 var ErrEOD = os.NewError(&#34;bson: unexpected end of data when parsing BSON&#34;)
 </pre>
+
+<h2 id="Command">func Command</h2>
+<p><code>func (db *Database) Command(cmd Query) (bson.Doc, os.Error)</code></p>
+<p>
+Command sends an arbitrary command to the database.
+It is equivalent to
+</p>
+<pre>col := db.Collection(&#34;$cmd&#34;)
+doc := col.FindOne(cmd)
+</pre>
+<p>
+If the $err key is not null in the reply, Command returns an error.
+</p>
+
+<h2 id="CommandNamespace">func CommandNamespace</h2>
+<p><code>func CommandNamespace(nameOrNamespace string) string</code></p>
+<p>
+CommandNamespace returns the command namespace name.$cmd given a database
+name or a collection namespace.
+</p>
 
 <h2 id="Decode">func Decode</h2>
 <p><code>func Decode(data []byte, v interface{}) (err os.Error)</code></p>
@@ -128,6 +152,12 @@ is returned.
 <p>
 To decode a BSON value into a nil interface value, the first type listed in
 the right hand column of the table above is used.
+</p>
+
+<h2 id="Drop">func Drop</h2>
+<p><code>func (db *Database) Drop() os.Error</code></p>
+<p>
+Drop deletes db.
 </p>
 
 <h2 id="Encode">func Encode</h2>
@@ -189,6 +219,12 @@ BSON cannot represent cyclic data structurs and Encode does not handle them.
 Passing cyclic structures to Encode will result in an infinite recursion.
 </p>
 
+<h2 id="Eval">func Eval</h2>
+<p><code>func (db *Database) Eval(code *bson.JavaScript, args string) (bson.Doc, os.Error)</code></p>
+<p>
+Eval evaluates a JavaScript expression or function on the MongoDB server.
+</p>
+
 <h2 id="FindOne">func FindOne</h2>
 <p><code>func FindOne(conn Conn, namespace string, query interface{}, options *FindOptions, result interface{}) os.Error</code></p>
 <p>
@@ -196,20 +232,26 @@ FindOne returns a single result for a query.
 </p>
 
 <h2 id="GetLastError">func GetLastError</h2>
-<p><code>func GetLastError(conn Conn, namespace string, cmd interface{}, err os.Error) os.Error</code></p>
+<p><code>func GetLastError(conn Conn, namespace string, cmd interface{}) os.Error</code></p>
 <p>
 GetLastError returns the last error for a database. The database is
 specified by the database component of namespace. The command cmd is used to
 fetch the last error. If cmd is nil, then the command {&#34;getLasetError&#34;: 1}
-is used to get the error. If the err argument is not nil, then err is
-returned directly from the function.
+is used to get the error.
+</p>
+
+<h2 id="Repair">func Repair</h2>
+<p><code>func (db *Database) Repair() os.Error</code></p>
+<p>
+Repair checks for and repairs corruption in the database.
 </p>
 
 <h2 id="RunCommand">func RunCommand</h2>
-<p><code>func RunCommand(conn Conn, namespace string, cmd, result interface{}) os.Error</code></p>
+<p><code>func RunCommand(conn Conn, namespace string, cmd interface{}) (map[string]interface{}, os.Error)</code></p>
 <p>
 RunCommand executes the command cmd on the database specified by the
-database component of namespace.
+database component of namespace. If cmd is a string, then the command {cmd:
+1} is sent to the database.
 </p>
 
 <h2 id="SafeInsert">func SafeInsert</h2>
@@ -228,6 +270,12 @@ SafeRemove returns the last error from the database after calling conn.Remove().
 <p><code>func SafeUpdate(conn Conn, namespace string, errorCmd, selector, update interface{}, options *UpdateOptions) os.Error</code></p>
 <p>
 SafeUpdate returns the last error from the database after calling conn.Update().
+</p>
+
+<h2 id="Stats">func Stats</h2>
+<p><code>func (db *Database) Stats() (bson.Doc, os.Error)</code></p>
+<p>
+Stats returns database statistics for db.
 </p>
 
 
@@ -264,6 +312,12 @@ A Conn represents a connection to a MongoDB server.
 When the application is done using the connection, the application must call
 the connection Close() method to release the resources used by the
 connection.
+</p>
+<p>
+The methods in this interface use a namespace string to specify the database
+and collection. A namespace string has the format &#34;&lt;database&gt;.&lt;collection&gt;&#34;
+where &lt;database&gt; is the name of the database and &lt;collection&gt; is the name of
+the collection.
 </p>
 
 <pre>type Conn interface {
@@ -356,6 +410,26 @@ DateTime represents a BSON timestamp.
 
 
 
+
+
+<h2 id="Db">type Db</h2>
+<p>
+Db represents a MongoDB database.
+</p>
+
+<pre>type Db struct {
+ Conn Conn
+ Name string
+}</pre>
+
+
+
+
+    <h3 id="Db.Collection">func (Db) Collection</h3>
+    <p><code>func (db Db) Collection(name string)</code></p>
+    <p>
+Collection returns the collection with name.
+</p>
 
 
 <h2 id="DecodeConvertError">type DecodeConvertError</h2>
