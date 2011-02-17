@@ -23,7 +23,8 @@ import (
 	"encoding/binary"
 )
 
-// DateTime represents a BSON timestamp.
+// DateTime represents a BSON timestamp. The value is in milliseconds since the
+// Unix epoch.
 type DateTime int64
 
 // Timestamp represents a BSON timesamp.
@@ -56,8 +57,8 @@ type ObjectId [12]byte
 // NewObjectId returns a new object id. This funtion uses the following format
 // for object ids:
 //
-//  [0:4]   Time since epoch in seconds. This is compatible 
-//          with other drivers.
+//  [0:4]  Time since epoch in seconds. This is compatible 
+//         with other drivers.
 // 
 //  [4:12] Incrementing counter intialized with crypto random
 //         number. This ensures that object ids are unique, but
@@ -97,8 +98,9 @@ func nextOidCounter() uint64 {
 	return oidCounter
 }
 
-// RawData represents a chunk of uninterpreted BSON data.
-type RawData struct {
+// BSONData represents a chunk of uninterpreted BSON data. Use this type to
+// copy raw data into our out of a BSON encoding.
+type BSONData struct {
 	Kind int
 	Data []byte
 }
@@ -106,7 +108,7 @@ type RawData struct {
 // Symbol represents a BSON symbol.
 type Symbol string
 
-// Code represents javascript code in BSON.
+// Code represents Javascript code in BSON.
 type Code string
 
 // Doc represents a BSON document. Use Doc instead of a native Go map when the
@@ -116,13 +118,13 @@ type Doc []struct {
 	Value interface{}
 }
 
-// MinMax represents either a minimum or maxium BSON value.
+// MinMax represents either a minimum or maximum BSON value.
 type MinMax int
 
 const (
 	// MaxValue is the maximum BSON value.
 	MaxValue MinMax = 1
-	// MinValue is the Minimum BSON value.
+	// MinValue is the minimum BSON value.
 	MinValue MinMax = -1
 )
 
