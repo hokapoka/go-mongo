@@ -126,3 +126,84 @@ func (c SafeConn) Insert(namespace string, documents ...interface{}) os.Error {
 func (c SafeConn) Remove(namespace string, selector interface{}, options *RemoveOptions) os.Error {
 	return SafeRemove(c.Conn, namespace, c.Cmd, selector, options)
 }
+
+
+// EnsureIndex creates an index on the collection based on 
+// the values in keys.  If the index allready exists it
+// returns an error.
+//   - keys map[string]int defines the properties for the 
+//     collection  to be indexed.
+func EnsureIndex(conn Conn, namespace string, keys map[string]int, unique, sparse bool) os.Error {
+
+    if len(keys) == 0 {
+        return os.NewError("You need to define some keys to index on")
+    }
+   
+    i := strings.Index(namespace, ".")
+    if i <= 0 {
+        return os.NewError("You need to define a full namespace to declare an index on")
+    }
+    idxns := namespace[:i] + ".system.indexes"
+   
+    name := ""
+    for k, v := range keys {
+        name += k + "_" + strconv.Itoa(v)
+    }
+   
+    var curidx map[string]interface{}
+    err := FindOne(conn, idxns, map[string]interface{}{ "name":name, "ns":namespace }, nil, &curidx)
+    if err == nil {
+        return os.NewError("Index allready exists")
+    }
+   
+    idx := map[string]interface{}{
+        "ns":namespace,
+        "key":keys,
+        "name":name,
+    }
+   
+    if unique {
+        idx["unique"] = true
+    }
+   
+    if sparse {
+        idx["sparse"] = true
+    }
+   
+    err = conn.Insert( idxns, idx )
+    if err != nil {
+        return err
+    }
+   
+    return nil
+
+}
+
+// Count issues a RunCommand over the given connection issuing the 
+// count command that uses more efficient server-side counting of the
+// documents that match the specified query
+func Count(conn Conn, namespace string, query interface{}) (float64, os.Error) {
+
+    coll := namespace
+   
+    i := strings.Index(namespace, ".")
+    if i <= 0 || i == len(namespace) -1 {
+        return -1, os.NewError("Invalid namespace")
+    }
+    coll = namespace[i+1:]
+   
+    cmd := Doc{
+        {"count", coll},
+        {"query", query},
+    }
+   
+    r, err := RunCommand( conn, namespace, cmd)
+    if err != nil {
+        return -1, err
+    }
+    n := (map[string]interface{})(r)["n"].(float64)
+   
+    return n, nil
+
+}
+
