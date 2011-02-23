@@ -144,9 +144,14 @@ func EnsureIndex(conn Conn, namespace string, keys map[string]int, unique, spars
         return os.NewError("You need to define a full namespace to declare an index on")
     }
     idxns := namespace[:i] + ".system.indexes"
-   
+
+    // Might be better to use fmt.Sprintf for this, but inc. the "fmt" package
+    // makes the linked package very large b/c of the unicode stuff
     name := ""
-    for k, v := range keys {
+    for k, v := range keys {  
+        if len(name) > 0 {
+            name += "_"
+        }  
         name += k + "_" + strconv.Itoa(v)
     }
    
